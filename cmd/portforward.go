@@ -35,27 +35,23 @@ func init() {
 
 // Main logic for port forwarding
 func executePortForwarding() error {
-	// Step 1: Fetch available AWS profiles
-	profiles, err := utils.GetFilteredProfiles()
+
+	// Step 1: Login to AWS
+	selectedProfile, err := utils.Login()
 	if err != nil {
 		return err
 	}
 
-	// Step 2: Prompt user to select a profile
-	selectedProfile, err := utils.PromptProfileSelection(profiles)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Selected AWS Profile: %s\n", selectedProfile)
+	fmt.Println("Login successful!")
 
-	// Step 3: Fetch RDS instances and prompt user for a DB selection
+	// Step 2: Fetch RDS instances and prompt user for a DB selection
 	dbIdentifier, err := rds.GetRDSInstance(selectedProfile)  // Use internal RDS package
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Using DB Identifier: %s\n", dbIdentifier)
 
-	// Step 4: Discover ECS clusters, services, tasks, and containers
+	// Step 3: Discover ECS clusters, services, tasks, and containers
 	cluster, err := ecs.SelectECSCluster(selectedProfile)  // Use internal ECS package
 	if err != nil {
 		return err
@@ -78,14 +74,14 @@ func executePortForwarding() error {
 	}
 	fmt.Printf("Cluster: %s, Service: %s, Task ID: %s, Runtime ID: %s, Container: %s\n", cluster, service, taskID, runtimeID, containerName)
 
-	// Step 5: Fetch RDS endpoint
+	// Step 4: Fetch RDS endpoint
 	dbHost, err := rds.GetRDSInstanceEndpoint(dbIdentifier, selectedProfile)  // Use internal RDS package
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Database Host: %s\n", dbHost)
 
-	// Step 6: Start SSM session
+	// Step 5: Start SSM session
 	err = ecs.StartSSMSession(selectedProfile, cluster, taskID, runtimeID, dbHost)
 	if err != nil {
 		return err
