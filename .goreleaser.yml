@@ -1,0 +1,29 @@
+builds:
+  - binary: infra
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+universal_binaries:
+  - replace: true
+
+brews:
+  -
+    name: infra
+    homepage: "https://github.com/oliverteo288/infra"
+    repository:
+      owner: oliverteo288
+      name: homebrew-infra
+    commit_author:
+      name: oliverteo288
+      email: oliver_teo288@hotmail.com
+
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
