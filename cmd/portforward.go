@@ -16,7 +16,7 @@ import (
 // portforwardCmd represents the portforward command
 var portforwardCmd = &cobra.Command{
 	Use:   "portforward",
-	Short: "A brief description of your command",
+	Short: "Making it ease for you to portfoward from Private RDS into your ECS	",
 	Long: `A longer description that spans multiple lines and likely contains examples
 and usage of using your command. For example:
 infra portforward`,
@@ -37,52 +37,52 @@ func init() {
 func executePortForwarding() error {
 
 	// Step 1: Login to AWS
-	selectedProfile, err := utils.Login()
+	selectedProfile, selectedRegion, err := utils.Login()
 	if err != nil {
 		return err
 	}
 
-	fmt.Println("Login successful!")
+	fmt.Printf("Login successful! %s\n", selectedRegion)
 
 	// Step 2: Fetch RDS instances and prompt user for a DB selection
-	dbIdentifier, err := rds.GetRDSInstance(selectedProfile)  // Use internal RDS package
+	dbIdentifier, err := rds.GetRDSInstance(selectedProfile, selectedRegion)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Using DB Identifier: %s\n", dbIdentifier)
 
 	// Step 3: Discover ECS clusters, services, tasks, and containers
-	cluster, err := ecs.SelectECSCluster(selectedProfile)  // Use internal ECS package
+	cluster, err := ecs.SelectECSCluster(selectedProfile, selectedRegion)
 	if err != nil {
 		return err
 	}
-	service, err := ecs.SelectECSService(cluster, selectedProfile)
+	service, err := ecs.SelectECSService(cluster, selectedProfile, selectedRegion)
 	if err != nil {
 		return err
 	}
-	taskID, err := ecs.SelectECSTask(cluster, service, selectedProfile)
+	taskID, err := ecs.SelectECSTask(cluster, service, selectedProfile, selectedRegion)
 	if err != nil {
 		return err
 	}
-	runtimeID, err := ecs.GetTaskDetails(cluster, taskID, selectedProfile)
+	runtimeID, err := ecs.GetTaskDetails(cluster, taskID, selectedProfile, selectedRegion)
 	if err != nil {
 		return err
 	}
-	containerName, err := ecs.SelectECSContainer(cluster, taskID, selectedProfile)
+	containerName, err := ecs.SelectECSContainer(cluster, taskID, selectedProfile, selectedRegion)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Cluster: %s, Service: %s, Task ID: %s, Runtime ID: %s, Container: %s\n", cluster, service, taskID, runtimeID, containerName)
 
 	// Step 4: Fetch RDS endpoint
-	dbHost, err := rds.GetRDSInstanceEndpoint(dbIdentifier, selectedProfile)  // Use internal RDS package
+	dbHost, err := rds.GetRDSInstanceEndpoint(dbIdentifier, selectedProfile, selectedRegion)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Database Host: %s\n", dbHost)
 
 	// Step 5: Start SSM session
-	err = ecs.StartSSMSession(selectedProfile, cluster, taskID, runtimeID, dbHost)
+	err = ecs.StartSSMSession(selectedProfile, cluster, taskID, runtimeID, dbHost, selectedRegion)
 	if err != nil {
 		return err
 	}

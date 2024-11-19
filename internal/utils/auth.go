@@ -1,20 +1,17 @@
 package utils
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 )
 
-
-func Login() (string, error) {
+func Login() (string, string, error) {
 	// Fetch all available AWS profiles
 	profiles, err := getFilteredProfiles()
 	if err != nil {
-		return "", fmt.Errorf("error fetching AWS profiles: %v", err)
+		return "", "",fmt.Errorf("error fetching AWS profiles: %v", err)
 	}
 
 	// Handle empty profile list by guiding the user to configure a new profile
@@ -24,26 +21,34 @@ func Login() (string, error) {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("failed to configure AWS SSO: %v", err)
+			return "", "", fmt.Errorf("failed to configure AWS SSO: %v", err)
 		}
-		return "", nil
+		return "", "",nil
 	}
 
 	// Prompt user to select a profile
-	selectedProfile, err := promptProfileSelection(profiles)
+	selectedProfile, err := PromptProfileSelection(profiles)
 	if err != nil {
-		return "", fmt.Errorf("error selecting AWS profile: %v", err)
+		return "", "",fmt.Errorf("error selecting AWS profile: %v", err)
 	}
 
 	fmt.Printf("Selected AWS Profile: %s\n", selectedProfile)
 
 	// Handle expired credentials for the selected profile
 	if err := handleExpiredCredentials(selectedProfile); err != nil {
-		return "", fmt.Errorf("error handling expired credentials for profile '%s': %v", selectedProfile, err)
+		return "", "", fmt.Errorf("error handling expired credentials for profile '%s': %v", selectedProfile, err)
 	}
 
-	fmt.Println("AWS profile is ready to use.")
-	return selectedProfile, nil
+	// Fetch and prompt for region selection
+	selectedRegion, err := FetchAndPromptRegion(selectedProfile)
+	if err != nil {
+		return "", "", fmt.Errorf("error selecting AWS region: %v", err)
+	}
+
+	fmt.Printf("Selected AWS Region: %s\n", selectedRegion)
+	fmt.Println("AWS profile and region.")
+
+	return selectedProfile, selectedRegion, nil
 }
 
 func getFilteredProfiles() ([]string, error) {
@@ -54,26 +59,6 @@ func getFilteredProfiles() ([]string, error) {
 	}
 	profiles := strings.Split(strings.TrimSpace(string(output)), "\n")
 	return profiles, nil
-}
-
-func promptProfileSelection(profiles []string) (string, error) {
-	fmt.Println("Select an AWS Profile:")
-	for i, profile := range profiles {
-		fmt.Printf("[%d] %s\n", i+1, profile)
-	}
-	fmt.Print("Enter the number of your choice: ")
-
-	reader := bufio.NewReader(os.Stdin)
-	choice, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %v", err)
-	}
-
-	index := strings.TrimSpace(choice)
-	if i, err := strconv.Atoi(index); err == nil && i > 0 && i <= len(profiles) {
-		return profiles[i-1], nil
-	}
-	return "", fmt.Errorf("invalid choice")
 }
 
 func handleExpiredCredentials(profile string) error {
