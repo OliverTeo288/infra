@@ -32,14 +32,17 @@ func CloneRepo(repoURL string) error {
 		return fmt.Errorf("failed to clone repository: %v", err)
 	}
 
-	// Use `cp` to copy the contents of the main folder to the current working directory
-	// Enable dotglob to copy hidden files, but exclude .git
-	cpCmd := exec.Command("sh", "-c", fmt.Sprintf(`
-		shopt -s dotglob && cp -r %s/* %s && rm -rf %s/.git
-	`, tempCloneDir, targetDir, tempCloneDir))
+	// Remove the .git directory to lose the remote connection
+	gitDir := filepath.Join(tempCloneDir, ".git")
+	if err := os.RemoveAll(gitDir); err != nil {
+		return fmt.Errorf("failed to remove .git directory: %v", err)
+	}
+
+	// Copy all files, including hidden ones (those starting with a '.')
+	cpCmd := exec.Command("sh", "-c", fmt.Sprintf("cp -r %s/. %s", tempCloneDir, targetDir))
 	cpCmd.Stdout = os.Stdout
 	cpCmd.Stderr = os.Stderr
-	fmt.Printf("Moving contents of %s to %s...\n", tempCloneDir, targetDir)
+	fmt.Printf("Copying contents from %s to %s...\n", tempCloneDir, targetDir)
 	if err := cpCmd.Run(); err != nil {
 		return fmt.Errorf("failed to move contents using cp: %v", err)
 	}
@@ -50,6 +53,6 @@ func CloneRepo(repoURL string) error {
 		return fmt.Errorf("failed to remove temporary directory: %v", err)
 	}
 
-	fmt.Println("Repository cloned and reorganized successfully.")
+	fmt.Println("Repository cloned, remote removed, and contents copied successfully.")
 	return nil
 }
