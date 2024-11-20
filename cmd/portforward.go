@@ -16,10 +16,8 @@ import (
 // portforwardCmd represents the portforward command
 var portforwardCmd = &cobra.Command{
 	Use:   "portforward",
-	Short: "Making it ease for you to portfoward from Private RDS into your ECS	",
-	Long: `A longer description that spans multiple lines and likely contains examples
-and usage of using your command. For example:
-infra portforward`,
+	Short: "Making it easier for you to portfoward into your Private RDS from your ECS",
+	Long: `Automatically discovers your ECS Tasks and RDS hostname to start an SSM session for DB management. Please ensure that you have a profile already set in place`,
 	Run: func(cmd *cobra.Command, args []string) {
 		err := executePortForwarding()
 		if err != nil {
@@ -75,14 +73,14 @@ func executePortForwarding() error {
 	fmt.Printf("Cluster: %s, Service: %s, Task ID: %s, Runtime ID: %s, Container: %s\n", cluster, service, taskID, runtimeID, containerName)
 
 	// Step 4: Fetch RDS endpoint
-	dbHost, err := rds.GetRDSInstanceEndpoint(dbIdentifier, selectedProfile, selectedRegion)
+	dbHost, dbPort ,err := rds.GetRDSInstanceEndpoint(dbIdentifier, selectedProfile, selectedRegion)
 	if err != nil {
 		return err
 	}
 	fmt.Printf("Database Host: %s\n", dbHost)
 
 	// Step 5: Start SSM session
-	err = ecs.StartSSMSession(selectedProfile, cluster, taskID, runtimeID, dbHost, selectedRegion)
+	err = ecs.StartSSMSession(selectedProfile, cluster, taskID, runtimeID, dbHost, selectedRegion, dbPort)
 	if err != nil {
 		return err
 	}

@@ -152,7 +152,7 @@ func SelectECSContainer(cluster, taskID, profile, region string) (string, error)
 }
 
 // StartSSMSession starts an SSM session for port forwarding
-func StartSSMSession(profile, cluster, taskID, runtimeID, dbHost, region string) error {
+func StartSSMSession(profile, cluster, taskID, runtimeID, dbHost, region string, dbPort int) error {
 	// Prompt user for a local port number
 	localPort, err := utils.PromptLocalPortNumber()
 	if err != nil {
@@ -167,7 +167,7 @@ func StartSSMSession(profile, cluster, taskID, runtimeID, dbHost, region string)
 	cmd := exec.Command("aws", "ssm", "start-session",
 		"--target", target,
 		"--document-name", "AWS-StartPortForwardingSessionToRemoteHost",
-		"--parameters", fmt.Sprintf(`{"host":["%s"],"portNumber":["5432"],"localPortNumber":["%d"]}`, dbHost, localPort),
+		"--parameters", fmt.Sprintf(`{"host":["%s"],"portNumber":["%d"],"localPortNumber":["%d"]}`, dbHost, dbPort ,localPort),
 		"--profile", profile, "--region", region)
 
 	cmd.Stdout = os.Stdout
