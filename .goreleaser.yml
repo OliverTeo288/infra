@@ -1,7 +1,7 @@
 builds:
   - binary: infra
     ldflags:
-      - "-X 'main.GitlabDomain=${GITLAB_DOMAIN}'"
+      - '-X "github.com/oliverteo288/infra/cmd.GitlabDomain={{ .Env.GITLAB_DOMAIN }}"'
     env:
       - CGO_ENABLED=0
       - GITLAB_DOMAIN
