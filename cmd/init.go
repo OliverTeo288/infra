@@ -7,6 +7,7 @@ import (
   "github.com/oliverteo288/infra/internal/utils"
 	"github.com/spf13/cobra"
 )
+var GitlabDomain string
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -19,9 +20,7 @@ Ensure you have the required access before running this command.`,
 			os.Exit(1)
 		}
 
-		domain := os.Getenv("GITLAB_DOMAIN")
-
-		err := utils.CloneRepo(domain)
+		err := utils.CloneRepo(GitlabDomain)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
