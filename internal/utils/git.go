@@ -33,7 +33,10 @@ func CloneRepo(repoURL string) error {
 	}
 
 	// Use `cp` to copy the contents of the main folder to the current working directory
-	cpCmd := exec.Command("sh", "-c", fmt.Sprintf("cp -r %s/* %s", tempCloneDir, targetDir))
+	// Enable dotglob to copy hidden files, but exclude .git
+	cpCmd := exec.Command("sh", "-c", fmt.Sprintf(`
+		shopt -s dotglob && cp -r %s/* %s && rm -rf %s/.git
+	`, tempCloneDir, targetDir, tempCloneDir))
 	cpCmd.Stdout = os.Stdout
 	cpCmd.Stderr = os.Stderr
 	fmt.Printf("Moving contents of %s to %s...\n", tempCloneDir, targetDir)
