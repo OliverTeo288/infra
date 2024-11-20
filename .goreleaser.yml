@@ -1,5 +1,7 @@
 builds:
   - binary: infra
+    ldflags:
+      - "-X 'main.GitlabDomain=${GITLAB_DOMAIN}'"
     env:
       - CGO_ENABLED=0
       - GITLAB_DOMAIN
