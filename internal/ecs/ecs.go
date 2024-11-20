@@ -75,7 +75,7 @@ func SelectECSService(cluster, profile, region string) (string, error) {
 	for i, service := range services {
 		fmt.Printf("[%d] %s\n", i+1, service)
 	}
-	return utils.PromptSelection(services) // Call the promptSelection function from utils
+	return utils.PromptSelection(services)
 }
 
 // GetECSTasks fetches the ECS tasks for a given cluster, service, and profile
@@ -109,7 +109,7 @@ func SelectECSTask(cluster, service, profile, region string) (string, error) {
 	for i, task := range tasks {
 		fmt.Printf("[%d] %s\n", i+1, task)
 	}
-	return utils.PromptSelection(tasks) // Call the promptSelection function from utils
+	return utils.PromptSelection(tasks)
 }
 
 // GetTaskDetails fetches the details for an ECS task
@@ -148,7 +148,7 @@ func SelectECSContainer(cluster, taskID, profile, region string) (string, error)
 	for i, container := range containers {
 		fmt.Printf("[%d] %s\n", i+1, container)
 	}
-	return utils.PromptSelection(containers) // Call the promptSelection function from utils
+	return utils.PromptSelection(containers)
 }
 
 // StartSSMSession starts an SSM session for port forwarding

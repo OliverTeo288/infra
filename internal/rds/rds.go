@@ -28,7 +28,7 @@ func GetRDSInstance(profile, region string) (string, error) {
 		fmt.Printf("[%d] %s\n", i+1, db)
 	}
 
-	return utils.PromptSelection(dbs) // Call the promptSelection function from prompts
+	return utils.PromptSelection(dbs)
 }
 
 // GetRDSInstanceEndpoint fetches the endpoint of the RDS instance

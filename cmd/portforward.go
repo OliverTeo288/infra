@@ -1,15 +1,13 @@
-/*
-Copyright © 2024 NAME HERE <EMAIL ADDRESS>
-
-*/
 package cmd
 
 import (
 	"fmt"
 	"os"
+
+  "github.com/oliverteo288/infra/internal/utils"
 	"github.com/oliverteo288/infra/internal/ecs"
   "github.com/oliverteo288/infra/internal/rds"
-  "github.com/oliverteo288/infra/internal/utils"
+
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +17,7 @@ var portforwardCmd = &cobra.Command{
 	Short: "Making it easier for you to portfoward into your Private RDS from your ECS",
 	Long: `Automatically discovers your ECS Tasks and RDS hostname to start an SSM session for DB management. Please ensure that you have a profile already set in place`,
 	Run: func(cmd *cobra.Command, args []string) {
-		err := executePortForwarding()
+		err := ExecutePortForwarding()
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
@@ -32,7 +30,7 @@ func init() {
 }
 
 // Main logic for port forwarding
-func executePortForwarding() error {
+func ExecutePortForwarding() error {
 
 	// Step 1: Login to AWS
 	selectedProfile, selectedRegion, err := utils.Login()
@@ -40,7 +38,7 @@ func executePortForwarding() error {
 		return err
 	}
 
-	fmt.Printf("Login successful! %s\n", selectedRegion)
+	fmt.Printf("Login successful!")
 
 	// Step 2: Fetch RDS instances and prompt user for a DB selection
 	dbIdentifier, err := rds.GetRDSInstance(selectedProfile, selectedRegion)

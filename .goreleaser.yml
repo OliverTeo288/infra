@@ -2,12 +2,14 @@ builds:
   - binary: infra
     env:
       - CGO_ENABLED=0
+      - GITLAB_DOMAIN
     goos:
       - linux
       - darwin
     goarch:
       - amd64
       - arm64
+
 
 universal_binaries:
   - replace: true

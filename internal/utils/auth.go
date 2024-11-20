@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"bufio"
 )
 
 func Login() (string, string, error) {
@@ -51,6 +52,21 @@ func Login() (string, string, error) {
 	return selectedProfile, selectedRegion, nil
 }
 
+func ConfirmAccess() bool {
+	reader := bufio.NewReader(os.Stdin)
+	fmt.Println("Do you have access to SHIPHATS GitLab? (Y/N):")
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		fmt.Println("Failed to read input:", err)
+		return false
+	}
+
+	// Normalize the response
+	response = strings.TrimSpace(strings.ToLower(response))
+	return response == "y"
+}
+
+
 func getFilteredProfiles() ([]string, error) {
 	cmd := exec.Command("sh", "-c", `grep '\[profile' ~/.aws/config | sed 's/\[profile \(.*\)\]/\1/'`)
 	output, err := cmd.Output()
@@ -78,3 +94,4 @@ func handleExpiredCredentials(profile string) error {
 	}
 	return nil
 }
+
