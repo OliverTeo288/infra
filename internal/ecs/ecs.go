@@ -5,10 +5,10 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"github.com/oliverteo288/infra/internal/utils"
+	"raid/infra/internal/utils"
 )
 
-// GetECSClusters fetches the ECS clusters for a given profile
+// Fetches the ECS clusters for a given profile
 func GetECSClusters(profile, region string) ([]string, error) {
 	cmd := exec.Command("aws", "ecs", "list-clusters", "--query", "clusterArns", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
@@ -31,20 +31,17 @@ func GetECSClusters(profile, region string) ([]string, error) {
 	return clusters, nil
 }
 
-// SelectECSCluster prompts the user to select an ECS cluster
+// Prompts the user to select an ECS cluster
 func SelectECSCluster(profile, region string) (string, error) {
 	clusters, err := GetECSClusters(profile, region)
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("Select an ECS Cluster:")
-	for i, cluster := range clusters {
-		fmt.Printf("[%d] %s\n", i+1, cluster)
-	}
-	return utils.PromptSelection(clusters) // Call the promptSelection function from utils
+
+	return utils.PromptSelection(clusters) 
 }
 
-// GetECSServices fetches the ECS services for a given cluster and profile
+// Fetches the ECS services for a given cluster and profile
 func GetECSServices(cluster, profile, region string) ([]string, error) {
 	cmd := exec.Command("aws", "ecs", "list-services", "--cluster", cluster, "--query", "serviceArns", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
@@ -65,20 +62,17 @@ func GetECSServices(cluster, profile, region string) ([]string, error) {
 	return services, nil
 }
 
-// SelectECSService prompts the user to select an ECS service
+// Prompts the user to select an ECS service
 func SelectECSService(cluster, profile, region string) (string, error) {
 	services, err := GetECSServices(cluster, profile, region)
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("Select an ECS Service:")
-	for i, service := range services {
-		fmt.Printf("[%d] %s\n", i+1, service)
-	}
+
 	return utils.PromptSelection(services)
 }
 
-// GetECSTasks fetches the ECS tasks for a given cluster, service, and profile
+// Fetches the ECS tasks for a given cluster, service, and profile
 func GetECSTasks(cluster, service, profile, region string) ([]string, error) {
 	cmd := exec.Command("aws", "ecs", "list-tasks", "--cluster", cluster, "--service-name", service, "--query", "taskArns", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
@@ -99,20 +93,17 @@ func GetECSTasks(cluster, service, profile, region string) ([]string, error) {
 	return taskIDs, nil
 }
 
-// SelectECSTask prompts the user to select an ECS task
+// Prompts the user to select an ECS task
 func SelectECSTask(cluster, service, profile, region string) (string, error) {
 	tasks, err := GetECSTasks(cluster, service, profile, region)
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("Select an ECS Task:")
-	for i, task := range tasks {
-		fmt.Printf("[%d] %s\n", i+1, task)
-	}
+
 	return utils.PromptSelection(tasks)
 }
 
-// GetTaskDetails fetches the details for an ECS task
+// Fetches the details for an ECS task
 func GetTaskDetails(cluster, taskID, profile, region string) (string, error) {
 	cmd := exec.Command("aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", taskID, "--query", "tasks[0].containers[0].runtimeId", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
@@ -122,7 +113,7 @@ func GetTaskDetails(cluster, taskID, profile, region string) (string, error) {
 	return strings.TrimSpace(string(output)), nil
 }
 
-// GetECSContainers fetches the container names for a given task
+// Fetches the container names for a given task
 func GetECSContainers(cluster, taskID, profile, region string) ([]string, error) {
 	cmd := exec.Command("aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", taskID, "--query", "tasks[0].containers[].name", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
@@ -138,21 +129,18 @@ func GetECSContainers(cluster, taskID, profile, region string) ([]string, error)
 	return containers, nil
 }
 
-// SelectECSContainer prompts the user to select an ECS container
+// Prompts the user to select an ECS container
 func SelectECSContainer(cluster, taskID, profile, region string) (string, error) {
 	containers, err := GetECSContainers(cluster, taskID, profile, region)
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("Select an ECS Container:")
-	for i, container := range containers {
-		fmt.Printf("[%d] %s\n", i+1, container)
-	}
+
 	return utils.PromptSelection(containers)
 }
 
-// StartSSMSession starts an SSM session for port forwarding
-func StartSSMSession(profile, cluster, taskID, runtimeID, dbHost, region string, dbPort int) error {
+// Starts an SSM session for port forwarding
+func StartECSSSMSession(profile, cluster, taskID, runtimeID, dbHost, region string, dbPort int) error {
 	// Prompt user for a local port number
 	localPort, err := utils.PromptLocalPortNumber()
 	if err != nil {

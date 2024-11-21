@@ -1,4 +1,4 @@
-module github.com/oliverteo288/infra
+module raid/infra
 
 go 1.23.3
 

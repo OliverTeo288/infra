@@ -10,22 +10,40 @@ import (
 	"strings"
 )
 
-// PromptSelection prompts the user to select from a list of options
+// Prompts the user to select from a list of options
 func PromptSelection(options []string) (string, error) {
-	fmt.Print("Enter the number of your choice: ")
-	reader := bufio.NewReader(os.Stdin)
-	choice, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %v", err)
+	attempts := 0
+
+	for attempts < 3 {
+		// Display the options for user reference
+		fmt.Println("Please select from the following options:")
+		for i, option := range options {
+			fmt.Printf("[%d] %s\n", i+1, option)
+		}
+
+		fmt.Print("Enter the number of your choice: ")
+		reader := bufio.NewReader(os.Stdin)
+		choice, err := reader.ReadString('\n')
+		if err != nil {
+			fmt.Printf("Failed to read input: %v\n", err)
+			attempts++
+			continue
+		}
+
+		index := strings.TrimSpace(choice)
+		if i, err := strconv.Atoi(index); err == nil && i > 0 && i <= len(options) {
+			return options[i-1], nil
+		}
+
+		attempts++
+		fmt.Printf("Invalid choice. You have %d attempt(s) remaining.\n", 3-attempts)
 	}
-	index := strings.TrimSpace(choice)
-	if i, err := strconv.Atoi(index); err == nil && i > 0 && i <= len(options) {
-		return options[i-1], nil
-	}
-	return "", fmt.Errorf("invalid choice")
+
+	// If the user fails 3 times, exit with an error
+	return "", fmt.Errorf("too many invalid attempts")
 }
 
-// PromptLocalPortNumber prompts the user for a local port number for port forwarding
+// Prompts the user for a local port number for port forwarding
 func PromptLocalPortNumber() (int, error) {
 	reader := bufio.NewReader(os.Stdin)
 	attempts := 0
@@ -76,60 +94,6 @@ func FetchAndPromptRegion(profile string) (string, error) {
 		regionNames = append(regionNames, region.RegionName)
 	}
 
-	// Prompt user to select a region
-	fmt.Println("Select an AWS Region:")
-	for i, region := range regionNames {
-		fmt.Printf("[%d] %s\n", i+1, region)
-	}
 	return PromptSelection(regionNames)
 }
 
-// func FetchAndPromptRegion(profile string) (string, error) {
-// 	// Load AWS configuration with the selected profile
-// 	cfg, err := config.LoadDefaultConfig(context.TODO(), config.WithSharedConfigProfile(profile))
-// 	if err != nil {
-// 		return "", fmt.Errorf("failed to load AWS config: %v", err)
-// 	}
-
-// 	// Create an EC2 client
-// 	client := ec2.NewFromConfig(cfg)
-
-// 	// Fetch the list of regions
-// 	resp, err := client.DescribeRegions(context.TODO(), &ec2.DescribeRegionsInput{})
-// 	if err != nil {
-// 		return "", fmt.Errorf("failed to fetch regions: %v", err)
-// 	}
-
-// 	// Extract region names
-// 	regionNames := []string{}
-// 	for _, region := range resp.Regions {
-// 		regionNames = append(regionNames, *region.RegionName)
-// 	}
-
-// 	// Prompt user to select a region
-// 	fmt.Println("Select an AWS Region:")
-// 	for i, region := range regionNames {
-// 		fmt.Printf("[%d] %s\n", i+1, region)
-// 	}
-// 	return PromptSelection(regionNames)
-// }
-
-func PromptProfileSelection(profiles []string) (string, error) {
-	fmt.Println("Select an AWS Profile:")
-	for i, profile := range profiles {
-		fmt.Printf("[%d] %s\n", i+1, profile)
-	}
-	fmt.Print("Enter the number of your choice: ")
-
-	reader := bufio.NewReader(os.Stdin)
-	choice, err := reader.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("failed to read input: %v", err)
-	}
-
-	index := strings.TrimSpace(choice)
-	if i, err := strconv.Atoi(index); err == nil && i > 0 && i <= len(profiles) {
-		return profiles[i-1], nil
-	}
-	return "", fmt.Errorf("invalid choice")
-}

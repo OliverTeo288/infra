@@ -5,10 +5,10 @@ import (
 	"os/exec"
 	"encoding/json"
 	"strings"
-	"github.com/oliverteo288/infra/internal/utils"
+	"raid/infra/internal/utils"
 )
 
-// GetRDSInstance fetches the RDS instance identifier for a given profile
+// Fetches the RDS instance identifier for a given profile
 func GetRDSInstance(profile, region string) (string, error) {
 	cmd := exec.Command("aws", "rds", "describe-db-instances", "--query", "DBInstances[].DBInstanceIdentifier", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
@@ -23,15 +23,10 @@ func GetRDSInstance(profile, region string) (string, error) {
 		return "", fmt.Errorf("no RDS instances found")
 	}
 
-	fmt.Println("Select an RDS Instance:")
-	for i, db := range dbs {
-		fmt.Printf("[%d] %s\n", i+1, db)
-	}
-
 	return utils.PromptSelection(dbs)
 }
 
-// GetRDSInstanceEndpoint fetches the endpoint of the RDS instance
+// Fetches the endpoint of the RDS instance
 func GetRDSInstanceEndpoint(identifier, profile, region string) (string, int, error) {
 
 	cmd := exec.Command("aws", "rds", "describe-db-instances",

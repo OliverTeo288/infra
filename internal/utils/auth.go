@@ -28,7 +28,7 @@ func Login() (string, string, error) {
 	}
 
 	// Prompt user to select a profile
-	selectedProfile, err := PromptProfileSelection(profiles)
+	selectedProfile, err := PromptSelection(profiles)
 	if err != nil {
 		return "", "",fmt.Errorf("error selecting AWS profile: %v", err)
 	}

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-  "github.com/oliverteo288/infra/internal/utils"
+  "raid/infra/internal/utils"
 	"github.com/spf13/cobra"
 )
-var GitlabDomain string
+var GitlabHttpsDomain string
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -20,7 +20,7 @@ Ensure you have the required access before running this command.`,
 			os.Exit(1)
 		}
 
-		err := utils.CloneRepo(GitlabDomain)
+		err := utils.CloneRepo(GitlabHttpsDomain)
 		if err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
