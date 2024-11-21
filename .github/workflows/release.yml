@@ -25,7 +25,9 @@ jobs:
       - name: Inject GITLAB_DOMAIN
         env:
           GITLAB_DOMAIN: ${{ secrets.GITLAB_DOMAIN }}
-        run: echo "GITLAB_DOMAIN=${{ secrets.GITLAB_DOMAIN }}" >> $GITHUB_ENV
+        run: |
+          echo "GITLAB_HTTPS_DOMAIN=${{ secrets.GITLAB_HTTPS_DOMAIN }}" >> $GITHUB_ENV
+          echo "GITLAB_SSH_DOMAIN=${{ secrets.GITLAB_SSH_DOMAIN }}" >> $GITHUB_ENV
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
         with:
