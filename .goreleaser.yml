@@ -1,8 +1,8 @@
 builds:
   - binary: infra
     ldflags:
-      - '-X "raid/infra/cmd.GitlabHttpsDomain={{ .Env.GITLAB_HTTPS_DOMAIN }}"'
-      - '-X "raid/infra/cmd.GitlabSshDomain={{ .Env.GITLAB_SSH_DOMAIN }}"'
+      - '-X "raid/infra/internal/functions.GitlabHttpsDomain={{ .Env.GITLAB_HTTPS_DOMAIN }}"'
+      - '-X "raid/infra/internal/functions.GitlabSshDomain={{ .Env.GITLAB_SSH_DOMAIN }}"'
     env:
       - CGO_ENABLED=0
       - GITLAB_DOMAIN
