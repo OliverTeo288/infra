@@ -43,6 +43,19 @@ func CreateS3Bucket(profile, region, bucketName string) error {
 		return fmt.Errorf("failed to create bucket: %w", err)
 	}
 
+	// Enable versioning for the bucket
+	versioningInput := &s3.PutBucketVersioningInput{
+		Bucket: aws.String(bucketName),
+		VersioningConfiguration: &types.VersioningConfiguration{
+			Status: types.BucketVersioningStatusEnabled,
+		},
+	}
+
+	_, err = s3Client.PutBucketVersioning(context.TODO(), versioningInput)
+	if err != nil {
+		return fmt.Errorf("failed to enable versioning: %w", err)
+	}
+
 	fmt.Printf("Bucket %q successfully created in region %q using profile %q.\n", bucketName, region, profile)
 	return nil
 }

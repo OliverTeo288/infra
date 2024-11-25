@@ -3,15 +3,16 @@ package functions
 
 import (
 	"fmt"
+	
 	"raid/infra/internal/utils"
 )
 
 var GitlabHttpsDomain string
 var GitlabSshDomain string
 
-func InitializeProject() error {
+func InitialiseProject() error {
 	// Step 1: Confirm access
-	if !utils.ConfirmAccess() {
+	if !utils.ConfirmPrompt("Do you have access to SHIPHATS GitLab? (Y/N)") {
 		return fmt.Errorf("please ensure you have access to SHIPHATS GitLab before running this command")
 	}
 

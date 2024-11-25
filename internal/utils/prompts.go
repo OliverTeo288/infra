@@ -97,3 +97,56 @@ func FetchAndPromptRegion(profile string) (string, error) {
 	return PromptSelection(regionNames)
 }
 
+func PromptInput(prompt string, validate func(input string) error, defaultValue string) (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+
+	// Store the original prompt string for reuse
+	basePrompt := prompt
+	if defaultValue != "" {
+		basePrompt = fmt.Sprintf("%s [%s]: ", prompt, defaultValue)
+	} else {
+		basePrompt = fmt.Sprintf("%s: ", prompt)
+	}
+
+	for {
+		// Display the prompt
+		fmt.Print(basePrompt)
+
+		// Read user input
+		input, err := reader.ReadString('\n')
+		if err != nil {
+			return "", fmt.Errorf("failed to read input: %w", err)
+		}
+
+		// Trim any leading/trailing whitespace
+		input = strings.TrimSpace(input)
+
+		// Use default value if input is empty
+		if input == "" && defaultValue != "" {
+			input = defaultValue
+		}
+
+		// Validate input if a validation function is provided
+		if validate != nil {
+			if err := validate(input); err != nil {
+				fmt.Printf("Invalid input: %s. Please try again.\n", err)
+				continue
+			}
+		}
+
+		return input, nil
+	}
+}
+
+// confirmPrompt displays a confirmation prompt and returns true if the user confirms.
+func ConfirmPrompt(message string) bool {
+	fmt.Print(message + " ")
+	var response string
+	_, err := fmt.Scanln(&response)
+	if err != nil {
+		fmt.Println("Error reading input:", err)
+		return false
+	}
+	response = strings.ToLower(strings.TrimSpace(response))
+	return response == "y"
+}
