@@ -20,7 +20,7 @@ func CreateS3(profile, region string) error {
 			return nil
 		}
 		
-		bucketName, err := utils.PromptInput("Enter the name of the S3 bucket:", validate, "test-dev-backend-tf-0000")
+		bucketName, err := utils.PromptInput("Enter the name of the S3 bucket", validate, "test-dev-backend-tf-0000")
 		if err != nil {
 			return err
 		}

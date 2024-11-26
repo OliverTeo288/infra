@@ -4,6 +4,8 @@ package functions
 import (
 	"regexp"
 	"errors"
+
+	"net/url"
 	"raid/infra/internal/utils"
 	"raid/infra/internal/aws"
 )
@@ -20,13 +22,25 @@ func CreateGitopsRole(profile, region string) error {
 			return nil
 		}
 		
-		roleName, err := utils.PromptInput("Enter the name of IAM Role for Terraform Gitops:", validate, "TerraformGitopsRole")
+		roleName, err := utils.PromptInput("Enter the name of IAM Role for Terraform Gitops", validate, "TerraformGitopsRole")
 		if err != nil {
 			return err
 		}
 
 		err = aws.SetupRole(profile, region, roleName)
 		if err != nil {
+			return err
+		}
+
+
+	  // Extract the base URL from GitlabHttpsDomain
+		parsedURL, err := url.Parse(GitlabHttpsDomain)
+		if err != nil {
+			return errors.New("invalid GitLab HTTPS domain provided")
+		}
+		baseURL := parsedURL.Scheme + "://" + parsedURL.Host
+		// Create the OIDC provider
+		if err := aws.CreateOIDCProvider(profile, region, baseURL); err != nil {
 			return err
 		}
 

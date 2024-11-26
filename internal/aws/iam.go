@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"crypto/sha1"
+	"encoding/hex"
+	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
@@ -143,5 +146,61 @@ func SetupRole(profile, region, roleName string) error {
 		return err
 	}
 
+	return nil
+}
+
+// FetchThumbprint retrieves the SHA-1 thumbprint of the SSL certificate for a given URL.
+func FetchThumbprint(url string) (string, error) {
+	// Create a HTTP client and fetch the TLS certificate from the GitLab URL
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", fmt.Errorf("failed to fetch the certificate from URL: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Extract the TLS certificate from the response
+	certs := resp.TLS.PeerCertificates
+	if len(certs) == 0 {
+		return "", fmt.Errorf("no certificates found for URL: %s", url)
+	}
+
+	// Compute the SHA-1 fingerprint of the first certificate in the chain
+	cert := certs[0]
+	thumbprint := sha1.Sum(cert.Raw)
+	return hex.EncodeToString(thumbprint[:]), nil
+}
+
+// CreateOIDCProvider creates an AWS OpenID Connect (OIDC) Provider for GitLab.
+func CreateOIDCProvider(profile, region, gitURL string) error {
+	// Load AWS configuration
+	cfg, err := config.LoadDefaultConfig(context.TODO(),
+		config.WithRegion(region),
+		config.WithSharedConfigProfile(profile),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to load AWS config: %w", err)
+	}
+
+	iamClient := iam.NewFromConfig(cfg)
+
+	// Fetch the thumbprint of the GitLab URL's certificate
+	thumbprint, err := FetchThumbprint(gitURL)
+	if err != nil {
+		return fmt.Errorf("failed to fetch thumbprint: %w", err)
+	}
+
+	// Create OpenID Connect provider
+	oidcInput := &iam.CreateOpenIDConnectProviderInput{
+		Url:            aws.String(gitURL),
+		ClientIDList:   []string{gitURL},
+		ThumbprintList: []string{thumbprint},
+	}
+
+	
+	if _, err := iamClient.CreateOpenIDConnectProvider(context.TODO(), oidcInput); err != nil {
+			return err
+	}
+
+	fmt.Println("OIDC Provider created successfully")
 	return nil
 }
