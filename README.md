@@ -15,8 +15,8 @@
 To install the `infra` CLI via Homebrew, use the following commands:
 
 ```bash
-$ brew tap oliverteo288/infra
-$ brew install oliverteo288/infra/infra
+brew tap oliverteo288/infra
+brew install oliverteo288/infra/infra
 ```
 
 Usage
@@ -36,7 +36,7 @@ This command allows you to port-forward into a private RDS instance via ECS Farg
 Example usage:
 
 ```
-$ infra portforward
+infra portforward
 ```
 
 #### 2\. **`infra init`**
@@ -54,9 +54,9 @@ By using the `--auto-approve` flag (or `-a` for shorthand), you can skip all con
 Example usage:
 
 ```
-$ infra init
-$ infra init -a
-$ infra init --auto-approve
+infra init
+infra init -a
+infra init --auto-approve
 ```
 
 ##### Subcommands
@@ -66,25 +66,25 @@ You can also run `infra init` with specific subcommands to create only individua
 -   **Create GitOps Templates, S3 Bucket, and IAM Role (default)**:
 
     ```
-    $ infra init
+    infra init
     ```
 
 -   **Create GitOps Templates Only**:
 
     ```
-    $ infra init repo
+    infra init repo
     ```
 
 -   **Create Only the S3 Bucket**:
 
     ```
-    $ infra init s3
+    infra init s3
     ```
 
 -   **Create Only the IAM Role**:
 
     ```
-    $ infra init role
+    infra init role
     ```
 
 ### Additional Notes
