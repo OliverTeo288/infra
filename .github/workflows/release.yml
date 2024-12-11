@@ -23,8 +23,6 @@ jobs:
         with:
           go-version: stable
       - name: Inject GITLAB_DOMAIN
-        env:
-          GITLAB_DOMAIN: ${{ secrets.GITLAB_DOMAIN }}
         run: |
           echo "GITLAB_HTTPS_DOMAIN=${{ secrets.GITLAB_HTTPS_DOMAIN }}" >> $GITHUB_ENV
           echo "GITLAB_SSH_DOMAIN=${{ secrets.GITLAB_SSH_DOMAIN }}" >> $GITHUB_ENV

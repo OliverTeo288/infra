@@ -5,7 +5,6 @@ builds:
       - '-X "raid/infra/internal/functions.GitlabSshDomain={{ .Env.GITLAB_SSH_DOMAIN }}"'
     env:
       - CGO_ENABLED=0
-      - GITLAB_DOMAIN
     goos:
       - linux
       - darwin
