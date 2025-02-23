@@ -18,20 +18,14 @@ func ExecutePortForwarding() error {
 		return err
 	}
 
-	fmt.Printf("Login successful!")
+	fmt.Printf("Login successful!\n")
 	
-	// Step 2: Fetch RDS instances and endpoint prompt user for a DB selection
-	dbIdentifier, err := rds.GetRDSInstance(selectedProfile, selectedRegion)
+	// // Step 2: Fetch RDS instances and endpoint
+	dbHost, dbPort, err := rds.GetRDSEndpoint(selectedProfile, selectedRegion)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Using DB Identifier: %s\n", dbIdentifier)
-
-	dbHost, dbPort ,err := rds.GetRDSInstanceEndpoint(dbIdentifier, selectedProfile, selectedRegion)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("Database Host: %s\n", dbHost)
+	fmt.Printf("Database Host: %s\nPort: %d\n", dbHost, dbPort)
 
 	// Step 3: Prompt user to select EC2 or ECS
 	options := []string{"EC2", "ECS"}
@@ -84,7 +78,6 @@ func ExecutePortForwarding() error {
 	} else {
 		return fmt.Errorf("invalid selection: %s", selection)
 	}
-
-	fmt.Println("Port forwarding session started successfully.")
+	
 	return nil
 }
