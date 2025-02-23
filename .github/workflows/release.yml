@@ -34,3 +34,20 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.PUBLISHER_TOKEN }}
+  notify-slack:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    if: success()  # Only run if goreleaser job succeeds
+    steps:
+      - name: Send Slack Notification
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          CI_PROJECT_NAME: ${{ github.repository }}
+          CI_COMMIT_TAG: ${{ github.ref_name }}
+          CI_COMMIT_TAG_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          curl -X POST -H "Content-type: application/json" --data "{
+            \"CI_PROJECT_NAME\":\"$CI_PROJECT_NAME\",
+            \"CI_COMMIT_TAG\":\"$CI_COMMIT_TAG\",
+            \"CI_COMMIT_TAG_MESSAGE\":\"$CI_COMMIT_TAG_MESSAGE\"
+          }" "$SLACK_WEBHOOK"
