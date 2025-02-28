@@ -74,11 +74,11 @@ func CreateIAMRole(iamClient *iam.Client, roleName, trustPolicy string) error {
 		Description:              aws.String(fmt.Sprintf("Role %s for Terraform GitOps with full access policy.", roleName)),
 	}
 
-	_, err := iamClient.CreateRole(context.TODO(), createRoleInput)
+	result, err := iamClient.CreateRole(context.TODO(), createRoleInput)
 	if err != nil {
 		return fmt.Errorf("failed to create role: %w", err)
 	}
-	fmt.Printf("Role %q created successfully.\n", roleName)
+  fmt.Printf("Role %q created successfully. ARN: %s\n", roleName, *result.Role.Arn)
 	return nil
 }
 
@@ -186,7 +186,7 @@ func CreateOIDCProvider(profile, region, gitURL string) error {
 	// Fetch the thumbprint of the GitLab URL's certificate
 	thumbprint, err := FetchThumbprint(gitURL)
 	if err != nil {
-		return fmt.Errorf("failed to fetch thumbprint: %w", err)
+		return fmt.Errorf("failed to fetch thumbprint: %w", err)	
 	}
 
 	// Create OpenID Connect provider
@@ -198,7 +198,7 @@ func CreateOIDCProvider(profile, region, gitURL string) error {
 
 	
 	if _, err := iamClient.CreateOpenIDConnectProvider(context.TODO(), oidcInput); err != nil {
-			return err
+			return fmt.Errorf("GitLab OIDC provider exists: %w", err)
 	}
 
 	fmt.Println("OIDC Provider created successfully")
