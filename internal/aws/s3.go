@@ -82,6 +82,8 @@ func uploadBackendTfvars(s3Client *s3.Client, bucketName, region string) error {
 	// File content
 	fileContent := fmt.Sprintf(`bucket  = "%s"
 key     = "terraform.tfstate"
+encrypt      = true  
+use_lockfile = true
 region  = "%s"`, bucketName, region)
 
 	// Upload the file
