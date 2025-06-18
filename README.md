@@ -24,8 +24,12 @@ Usage
 
 ### Prerequisites
 
-1.  Ensure you have an **AWS profile** configured with proper permissions.
-2.  Ensure you have **SHIPHATS access**. Without access, you will not be able to create the Terraform GitOps template.
+1. Ensure you have `awscli` installed
+2. Ensure you have `session-manager-plugin` installed for portforwarding
+3.  Ensure you have an **AWS profile** configured with proper permissions.
+4.  Ensure you have **SHIPHATS access**. Without access, you will not be able to create the Terraform GitOps template.
+5. Minimal required IAM permissions for `portforard`
+
 
 ### Commands
 
@@ -92,6 +96,3 @@ You can also run `infra init` with specific subcommands to create only individua
 -   The `infra init` process requires your AWS profile to have the necessary permissions for creating resources such as S3 buckets and IAM roles.
 -   The `infra portforward` command requires the appropriate ECS and RDS access through your AWS profile.
 -   Ensure that your AWS profile has sufficient permissions to manage the resources created by this tool (IAM, S3, etc.).
-
-
-Update gitlab domain

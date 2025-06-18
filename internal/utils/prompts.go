@@ -72,7 +72,11 @@ func PromptLocalPortNumber() (int, error) {
 // Fetches available regions using the AWS CLI and prompts the user to select one.
 func FetchAndPromptRegion(profile string) (string, error) {
 	// Run AWS CLI command to fetch regions
-	cmd := exec.Command("aws", "ec2", "describe-regions", "--profile", profile, "--output", "json")
+	cmd := exec.Command("aws", "ec2", "describe-regions",
+		"--profile", profile,
+		"--region", "ap-southeast-1",
+		"--output", "json",
+	)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch regions: %v", err)
