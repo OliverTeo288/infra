@@ -93,7 +93,7 @@ func CreateIAMRole(iamClient *iam.Client, roleName, trustPolicy string) error {
 	createRoleInput := &iam.CreateRoleInput{
 		RoleName:                 aws.String(roleName),
 		AssumeRolePolicyDocument: aws.String(trustPolicy),
-		Description:              aws.String(fmt.Sprintf("Role %s for Terraform GitOps with full access policy.", roleName)),
+		Description:              aws.String(fmt.Sprintf("Role %s created using infra cli.", roleName)),
 	}
 
 	result, err := iamClient.CreateRole(context.TODO(), createRoleInput)
