@@ -26,6 +26,7 @@ jobs:
         run: |
           echo "GITLAB_HTTPS_DOMAIN=${{ secrets.GITLAB_HTTPS_DOMAIN }}" >> $GITHUB_ENV
           echo "GITLAB_SSH_DOMAIN=${{ secrets.GITLAB_SSH_DOMAIN }}" >> $GITHUB_ENV
+          echo "COMMON_AWS_ACCOUNT_ID=${{ secrets.COMMON_AWS_ACCOUNT_ID }}" >> $GITHUB_ENV
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
         with:
