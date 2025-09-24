@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 )
 
@@ -60,6 +61,7 @@ func getFilteredProfiles() ([]string, error) {
 		return nil, fmt.Errorf("failed to fetch AWS profiles: %v", err)
 	}
 	profiles := strings.Split(strings.TrimSpace(string(output)), "\n")
+	sort.Strings(profiles)
 	return profiles, nil
 }
 

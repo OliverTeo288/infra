@@ -66,6 +66,28 @@ func CreateTrustPolicy(accountID string) (string, error) {
 	return string(trustPolicyJSON), nil
 }
 
+// CreateECRTrustPolicy generates a trust policy for ECR role with cross-account user access.
+func CreateECRTrustPolicy(commonAccountID string) (string, error) {
+	trustPolicy := map[string]interface{}{
+		"Version": "2012-10-17",
+		"Statement": []map[string]interface{}{
+			{
+				"Effect": "Allow",
+				"Principal": map[string]string{
+					"AWS": fmt.Sprintf("arn:aws:iam::%s:user/crossacc-ecrreader", commonAccountID),
+				},
+				"Action": "sts:AssumeRole",
+			},
+		},
+	}
+
+	trustPolicyJSON, err := json.Marshal(trustPolicy)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal ECR trust policy: %w", err)
+	}
+	return string(trustPolicyJSON), nil
+}
+
 // CreateIAMRole creates an IAM role with the specified role name and trust policy.
 func CreateIAMRole(iamClient *iam.Client, roleName, trustPolicy string) error {
 	createRoleInput := &iam.CreateRoleInput{
@@ -113,6 +135,53 @@ func AttachInlinePolicy(iamClient *iam.Client, roleName string) error {
 	return nil
 }
 
+// AttachECRInlinePolicy attaches ECR-specific inline policy to the specified role.
+func AttachECRInlinePolicy(iamClient *iam.Client, roleName, accountID string) error {
+	inlinePolicy := map[string]interface{}{
+		"Version": "2012-10-17",
+		"Statement": []map[string]interface{}{
+			{
+				"Effect": "Allow",
+				"Action": []string{
+					"ecr:GetAuthorizationToken",
+					"ecr:DescribeImages",
+				},
+				"Resource": "*",
+			},
+			{
+				"Effect": "Allow",
+				"Action": []string{
+					"ecr:BatchCheckLayerAvailability",
+					"ecr:GetDownloadUrlForLayer",
+					"ecr:BatchGetImage",
+					"ecr:DescribeRepositories",
+					"ecr:ListImages",
+				},
+				"Resource": []string{
+					fmt.Sprintf("arn:aws:ecr:ap-southeast-1:%s:repository/*", accountID),
+				},
+			},
+		},
+	}
+
+	inlinePolicyJSON, err := json.Marshal(inlinePolicy)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ECR inline policy: %w", err)
+	}
+
+	putRolePolicyInput := &iam.PutRolePolicyInput{
+		RoleName:       aws.String(roleName),
+		PolicyName:     aws.String(fmt.Sprintf("%sPolicy", roleName)),
+		PolicyDocument: aws.String(string(inlinePolicyJSON)),
+	}
+
+	_, err = iamClient.PutRolePolicy(context.TODO(), putRolePolicyInput)
+	if err != nil {
+		return fmt.Errorf("failed to attach ECR inline policy to role: %w", err)
+	}
+	return nil
+}
+
 // Main function to create the role and attach the policy.
 func SetupRole(profile, region, roleName string) error {
 	// Load AWS configuration
@@ -143,6 +212,42 @@ func SetupRole(profile, region, roleName string) error {
 
 	// Attach inline policy
 	if err := AttachInlinePolicy(iamClient, roleName); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// SetupECRRole creates an ECR role with cross-account trust and ECR permissions.
+func SetupECRRole(profile, region, roleName, commonAccountID string) error {
+	// Load AWS configuration
+	cfg, err := LoadAWSConfig(profile, region)
+	if err != nil {
+		return err
+	}
+
+	// Get AWS account ID
+	accountID, err := GetAWSAccountID(cfg)
+	if err != nil {
+		return err
+	}
+
+	// Generate ECR trust policy
+	trustPolicy, err := CreateECRTrustPolicy(commonAccountID)
+	if err != nil {
+		return err
+	}
+
+	// Create an IAM client
+	iamClient := iam.NewFromConfig(cfg)
+
+	// Create IAM role
+	if err := CreateIAMRole(iamClient, roleName, trustPolicy); err != nil {
+		return err
+	}
+
+	// Attach ECR inline policy
+	if err := AttachECRInlinePolicy(iamClient, roleName, accountID); err != nil {
 		return err
 	}
 

@@ -9,6 +9,7 @@
   1. Creating Terraform GitOps templates.
   2. Creating an S3 state bucket for Terraform.
   3. Creating an IAM role for GitOps integration.
+- **`infra ecrrole`**: Creates an IAM role named 'ecrreader' with ECR pull permissions and cross-account trust relationship.
 
 ## Installation via Homebrew
 
@@ -50,6 +51,16 @@ The `init` command sets up your repository and AWS resources for Terraform GitOp
 -   Creating Terraform GitOps templates.
 -   Creating an S3 bucket for Terraform state management.
 -   Creating an IAM role for Terraform GitOps.
+
+#### 3\. **`infra ecrrole`**
+
+This command creates an IAM role named 'ecrreader' with permissions to pull ECR images and establishes a cross-account trust relationship.
+
+Example usage:
+
+```
+infra ecrrole
+```
 
 ##### Auto-approve Option
 

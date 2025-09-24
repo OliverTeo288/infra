@@ -3,6 +3,7 @@ builds:
     ldflags:
       - '-X "raid/infra/internal/functions.GitlabHttpsDomain={{ .Env.GITLAB_HTTPS_DOMAIN }}"'
       - '-X "raid/infra/internal/functions.GitlabSshDomain={{ .Env.GITLAB_SSH_DOMAIN }}"'
+      - '-X "raid/infra/internal/functions.CommonAwsAccountId={{ .Env.COMMON_AWS_ACCOUNT_ID }}"'
     env:
       - CGO_ENABLED=0
     goos:
