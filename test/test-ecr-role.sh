@@ -7,7 +7,8 @@ set -e
 read -p "Enter AWS Access Key ID: " AWS_ACCESS_KEY_ID
 read -s -p "Enter AWS Secret Access Key: " AWS_SECRET_ACCESS_KEY
 echo
-read -p "Enter Role ARN (arn:aws:iam::<account_id>:role/ecrreader): " ROLE_ARN
+read -p "Enter Account ID to assume role into: " ACCOUNT_ID
+ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/ecrreader"
 read -p "Enter ECR Image (<aws_account_id>.dkr.ecr.ap-southeast-1.amazonaws.com/<ecr_repo>:<image_tag>): " ECR_IMAGE
 REGION="ap-southeast-1"
 
@@ -33,8 +34,14 @@ ASSUMED_ACCOUNT_ID=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r '.AssumedRoleUser.Arn' |
 
 echo "2. Successfully assumed role into AWS Account: $ASSUMED_ACCOUNT_ID"
 
+# If user didn't provide full URL, construct it
+if [[ ! "$ECR_IMAGE" == *".amazonaws.com"* ]]; then
+    ECR_IMAGE="$ASSUMED_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com/$ECR_IMAGE"
+    echo "Using full ECR URL: $ECR_IMAGE"
+fi
+
 echo "3. Getting ECR login token"
-aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin 992382751011.dkr.ecr.ap-southeast-1.amazonaws.com
+aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin $ASSUMED_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com
 
 echo "4. Pulling ECR image: $ECR_IMAGE"
 docker pull "$ECR_IMAGE"
