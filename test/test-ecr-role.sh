@@ -34,16 +34,20 @@ ASSUMED_ACCOUNT_ID=$(echo "$ASSUME_ROLE_OUTPUT" | jq -r '.AssumedRoleUser.Arn' |
 
 echo "2. Successfully assumed role into AWS Account: $ASSUMED_ACCOUNT_ID"
 
+echo "3. Listing all ECR repositories:"
+aws ecr describe-repositories --region "$REGION" --output table --query 'repositories[*].[repositoryName,repositoryUri]' || echo "No repositories found or insufficient permissions"
+echo
+
 # If user didn't provide full URL, construct it
 if [[ ! "$ECR_IMAGE" == *".amazonaws.com"* ]]; then
     ECR_IMAGE="$ASSUMED_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com/$ECR_IMAGE"
     echo "Using full ECR URL: $ECR_IMAGE"
 fi
 
-echo "3. Getting ECR login token"
+echo "4. Getting ECR login token"
 aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin $ASSUMED_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com
 
-echo "4. Pulling ECR image: $ECR_IMAGE"
+echo "5. Pulling ECR image: $ECR_IMAGE"
 docker pull "$ECR_IMAGE"
 
-echo "5. Test completed successfully!"
+echo "6. Test completed successfully!"
