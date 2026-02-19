@@ -20,6 +20,12 @@ brew tap oliverteo288/infra
 brew install oliverteo288/infra/infra
 ```
 
+### Supported Architectures
+
+- **Linux**: amd64, arm64
+- **macOS**: amd64 (Intel), arm64 (Apple Silicon)
+- **Windows**: amd64, arm64
+
 Usage
 -----
 
