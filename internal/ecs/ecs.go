@@ -39,7 +39,7 @@ func SelectECSCluster(profile, region string) (string, error) {
 		return "", err
 	}
 
-	return utils.PromptSelection(clusters) 
+	return utils.PromptSelection(clusters, "ECS Cluster") 
 }
 
 // Fetches the ECS services for a given cluster and profile
@@ -70,7 +70,7 @@ func SelectECSService(cluster, profile, region string) (string, error) {
 		return "", err
 	}
 
-	return utils.PromptSelection(services)
+	return utils.PromptSelection(services, "ECS Service")
 }
 
 // Fetches the ECS tasks for a given cluster, service, and profile
@@ -101,7 +101,7 @@ func SelectECSTask(cluster, service, profile, region string) (string, error) {
 		return "", err
 	}
 
-	return utils.PromptSelection(tasks)
+	return utils.PromptSelection(tasks, "ECS Task")
 }
 
 // Fetches the details for an ECS task
@@ -137,7 +137,29 @@ func SelectECSContainer(cluster, taskID, profile, region string) (string, error)
 		return "", err
 	}
 
-	return utils.PromptSelection(containers)
+	return utils.PromptSelection(containers, "ECS Container")
+}
+
+// Starts an ECS exec session with shell
+func StartECSExecSession(profile, cluster, taskID, containerName, region string) error {
+	cmd := exec.Command("aws", "ecs", "execute-command",
+		"--cluster", cluster,
+		"--task", taskID,
+		"--container", containerName,
+		"--interactive",
+		"--command", "/bin/sh",
+		"--profile", profile,
+		"--region", region)
+
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err := cmd.Run()
+	if err != nil {
+		return fmt.Errorf("failed to start ECS exec session: %v", err)
+	}
+	return nil
 }
 
 // Starts an SSM session for port forwarding

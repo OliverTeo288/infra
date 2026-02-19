@@ -25,7 +25,7 @@ func GetRDSEndpoint(profile, region string) (string, int, error) {
 		return "", 0, err
 	}
 
-	identifier, err := utils.PromptSelection(selections)
+	identifier, err := utils.PromptSelection(selections, "RDS Instance or Proxy")
 	if err != nil {
 		return "", 0, err
 	}

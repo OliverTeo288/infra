@@ -11,12 +11,16 @@ import (
 )
 
 // Prompts the user to select from a list of options
-func PromptSelection(options []string) (string, error) {
+func PromptSelection(options []string, taskName ...string) (string, error) {
 	attempts := 0
 
 	for attempts < 3 {
 		// Display the options for user reference
-		fmt.Println("Please select from the following options:")
+		if len(taskName) > 0 && taskName[0] != "" {
+			fmt.Printf("Please select %s from the following options:\n", taskName[0])
+		} else {
+			fmt.Println("Please select from the following options:")
+		}
 		for i, option := range options {
 			fmt.Printf("[%d] %s\n", i+1, option)
 		}
@@ -98,7 +102,7 @@ func FetchAndPromptRegion(profile string) (string, error) {
 		regionNames = append(regionNames, region.RegionName)
 	}
 
-	return PromptSelection(regionNames)
+	return PromptSelection(regionNames, "AWS Region")
 }
 
 func PromptInput(prompt string, validate func(input string) error, defaultValue string) (string, error) {

@@ -52,7 +52,7 @@ func SelectEC2Instance(profile, region string) (string, error) {
 		return "", err
 	}
 
-	selectedInstance, err := utils.PromptSelection(instances)
+	selectedInstance, err := utils.PromptSelection(instances, "EC2 Instance")
 	if err != nil {
 		return "", err
 	}
