@@ -5,12 +5,14 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 )
 
@@ -135,6 +137,11 @@ func CreateIAMRole(iamClient *iam.Client, roleName, trustPolicy string) error {
 
 	result, err := iamClient.CreateRole(context.TODO(), createRoleInput)
 	if err != nil {
+		var alreadyExists *iamtypes.EntityAlreadyExistsException
+		if errors.As(err, &alreadyExists) {
+			fmt.Printf("Role %q already exists, skipping creation.\n", roleName)
+			return nil
+		}
 		return fmt.Errorf("failed to create role: %w", err)
 	}
 	fmt.Printf("Role %q created successfully. ARN: %s\n", roleName, *result.Role.Arn)
@@ -275,12 +282,12 @@ func FetchThumbprint(url string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	certs := resp.TLS.PeerCertificates
-	if len(certs) == 0 {
-		return "", fmt.Errorf("no certificates found for URL: %s", url)
+	if resp.TLS == nil || len(resp.TLS.PeerCertificates) == 0 {
+		return "", fmt.Errorf("no TLS certificates found for URL: %s", url)
 	}
 
-	cert := certs[0]
+	certs := resp.TLS.PeerCertificates
+	cert := certs[len(certs)-1]
 	thumbprint := sha1.Sum(cert.Raw)
 	return hex.EncodeToString(thumbprint[:]), nil
 }
@@ -309,7 +316,12 @@ func CreateOIDCProvider(profile, region, gitURL string) error {
 	}
 
 	if _, err := iamClient.CreateOpenIDConnectProvider(context.TODO(), oidcInput); err != nil {
-		return fmt.Errorf("GitLab OIDC provider exists: %w", err)
+		var alreadyExists *iamtypes.EntityAlreadyExistsException
+		if errors.As(err, &alreadyExists) {
+			fmt.Println("OIDC provider already exists, skipping creation.")
+			return nil
+		}
+		return fmt.Errorf("failed to create OIDC provider: %w", err)
 	}
 
 	fmt.Println("OIDC Provider created successfully")

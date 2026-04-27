@@ -1,17 +1,21 @@
 package ec2
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
-	
+	"time"
+
 	"raid/infra/internal/utils"
 )
 
 // Retrieves a list of EC2 instances with their instance IDs and names.
 func FetchEC2Instances(profile, region string) ([]string, error) {
-	cmd := exec.Command("aws", "ec2", "describe-instances",
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "ec2", "describe-instances",
 		"--query", "Reservations[].Instances[].[InstanceId, Tags[?Key=='Name'].Value | [0], State.Name]",
 		"--output", "text",
 		"--profile", profile,

@@ -1,12 +1,14 @@
 package rds
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
-	"encoding/json"
 	"strings"
-	"errors"
-	
+	"time"
+
 	"raid/infra/internal/utils"
 )
 
@@ -43,7 +45,10 @@ func fetchRDSSelections(profile, region string) ([]string, error) {
 		return nil, err
 	}
 
-	proxies, _ := fetchRDSProxies(profile, region)
+	proxies, err := fetchRDSProxies(profile, region)
+	if err != nil {
+		fmt.Printf("Note: could not fetch RDS proxies: %v\n", err)
+	}
 	selections := append(instances, proxies...)
 
 	if len(selections) == 0 {
@@ -53,7 +58,9 @@ func fetchRDSSelections(profile, region string) ([]string, error) {
 }
 
 func fetchRDSInstances(profile, region string) ([]string, error) {
-	cmd := exec.Command("aws", "rds", "describe-db-instances", "--query", "DBInstances[].DBInstanceIdentifier", "--output", "text", "--profile", profile, "--region", region)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "rds", "describe-db-instances", "--query", "DBInstances[].DBInstanceIdentifier", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch RDS instances: %v", err)
@@ -67,7 +74,9 @@ func fetchRDSInstances(profile, region string) ([]string, error) {
 }
 
 func fetchRDSProxies(profile, region string) ([]string, error) {
-	cmd := exec.Command("aws", "rds", "describe-db-proxies", "--query", "DBProxies[].DBProxyName", "--output", "text", "--profile", profile, "--region", region)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "rds", "describe-db-proxies", "--query", "DBProxies[].DBProxyName", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -82,8 +91,10 @@ func fetchRDSProxies(profile, region string) ([]string, error) {
 
 func fetchInstanceEndpoint(identifier, profile, region string) (string, int, error) {
 	identifier = strings.TrimPrefix(identifier, "[RDS instance] ")
-	cmd := exec.Command("aws", "rds", "describe-db-instances", "--db-instance-identifier", identifier, "--query", "DBInstances[0].Endpoint", "--output", "json", "--profile", profile, "--region", region)
-	
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "rds", "describe-db-instances", "--db-instance-identifier", identifier, "--query", "DBInstances[0].Endpoint", "--output", "json", "--profile", profile, "--region", region)
+
 	output, err := cmd.Output()
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to fetch instance endpoint: %v", err)
@@ -101,8 +112,10 @@ func fetchInstanceEndpoint(identifier, profile, region string) (string, int, err
 
 func fetchProxyEndpoint(identifier, profile, region string) (string, int, error) {
 	identifier = strings.TrimPrefix(identifier, "[RDS proxy] ")
-	cmd := exec.Command("aws", "rds", "describe-db-proxies", "--db-proxy-name", identifier, "--query", "DBProxies[0].[Endpoint, EngineFamily]", "--output", "json", "--profile", profile, "--region", region)
-	
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "rds", "describe-db-proxies", "--db-proxy-name", identifier, "--query", "DBProxies[0].[Endpoint, EngineFamily]", "--output", "json", "--profile", profile, "--region", region)
+
 	output, err := cmd.Output()
 	if err != nil {
 		return "", 0, fmt.Errorf("failed to fetch proxy endpoint: %v", err)
@@ -116,8 +129,17 @@ func fetchProxyEndpoint(identifier, profile, region string) (string, int, error)
 		return "", 0, fmt.Errorf("unexpected proxy endpoint format")
 	}
 
-	address, _ := proxyResult[0].(string)
-	engineFamily, _ := proxyResult[1].(string)
-	port := enginePortMap[strings.ToUpper(engineFamily)]
+	address, ok := proxyResult[0].(string)
+	if !ok || address == "" {
+		return "", 0, fmt.Errorf("invalid or missing proxy endpoint address")
+	}
+	engineFamily, ok := proxyResult[1].(string)
+	if !ok || engineFamily == "" {
+		return "", 0, fmt.Errorf("invalid or missing proxy engine family")
+	}
+	port, ok := enginePortMap[strings.ToUpper(engineFamily)]
+	if !ok {
+		return "", 0, fmt.Errorf("unknown engine family %q", engineFamily)
+	}
 	return address, port, nil
 }

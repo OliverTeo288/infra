@@ -2,12 +2,14 @@ package utils
 
 import (
 	"bufio"
-	"fmt"
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Prompts the user to select from a list of options
@@ -75,10 +77,10 @@ func PromptLocalPortNumber() (int, error) {
 
 // Fetches available regions using the AWS CLI and prompts the user to select one.
 func FetchAndPromptRegion(profile string) (string, error) {
-	// Run AWS CLI command to fetch regions
-	cmd := exec.Command("aws", "ec2", "describe-regions",
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "ec2", "describe-regions",
 		"--profile", profile,
-		"--region", "ap-southeast-1",
 		"--output", "json",
 	)
 	output, err := cmd.Output()

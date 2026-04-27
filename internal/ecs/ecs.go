@@ -1,17 +1,21 @@
 package ecs
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
-	
+	"time"
+
 	"raid/infra/internal/utils"
 )
 
 // Fetches the ECS clusters for a given profile
 func GetECSClusters(profile, region string) ([]string, error) {
-	cmd := exec.Command("aws", "ecs", "list-clusters", "--query", "clusterArns", "--output", "text", "--profile", profile, "--region", region)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "ecs", "list-clusters", "--query", "clusterArns", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch ECS clusters: %v", err)
@@ -43,7 +47,9 @@ func SelectECSCluster(profile, region string) (string, error) {
 
 // Fetches the ECS services for a given cluster and profile
 func GetECSServices(cluster, profile, region string) ([]string, error) {
-	cmd := exec.Command("aws", "ecs", "list-services", "--cluster", cluster, "--query", "serviceArns", "--output", "text", "--profile", profile, "--region", region)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "ecs", "list-services", "--cluster", cluster, "--query", "serviceArns", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch ECS services: %v", err)
@@ -73,7 +79,9 @@ func SelectECSService(cluster, profile, region string) (string, error) {
 
 // Fetches the ECS tasks for a given cluster, service, and profile
 func GetECSTasks(cluster, service, profile, region string) ([]string, error) {
-	cmd := exec.Command("aws", "ecs", "list-tasks", "--cluster", cluster, "--service-name", service, "--query", "taskArns", "--output", "text", "--profile", profile, "--region", region)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "ecs", "list-tasks", "--cluster", cluster, "--service-name", service, "--query", "taskArns", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch ECS tasks: %v", err)
@@ -103,7 +111,9 @@ func SelectECSTask(cluster, service, profile, region string) (string, error) {
 
 // Fetches the details for an ECS task
 func GetTaskDetails(cluster, taskID, profile, region string) (string, error) {
-	cmd := exec.Command("aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", taskID, "--query", "tasks[0].containers[0].runtimeId", "--output", "text", "--profile", profile, "--region", region)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", taskID, "--query", "tasks[0].containers[0].runtimeId", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch ECS task details: %v", err)
@@ -113,7 +123,9 @@ func GetTaskDetails(cluster, taskID, profile, region string) (string, error) {
 
 // Fetches the container names for a given task
 func GetECSContainers(cluster, taskID, profile, region string) ([]string, error) {
-	cmd := exec.Command("aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", taskID, "--query", "tasks[0].containers[].name", "--output", "text", "--profile", profile, "--region", region)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", taskID, "--query", "tasks[0].containers[].name", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch ECS containers: %v", err)

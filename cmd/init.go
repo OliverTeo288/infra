@@ -37,14 +37,7 @@ Ensure you have the required access before running this command.`,
 		}
 
 		// Step 1: Login to AWS
-		selectedProfile, selectedRegion, err := utils.Login()
-		if err != nil {
-			fmt.Println("Error logging in:", err)
-			os.Exit(1)
-		}
-
-		fmt.Println("Login successful!")
-
+		selectedProfile, selectedRegion := loginOrExit()
 
 		// Step 2: Create S3 Bucket
 		if err := functions.CreateS3(selectedProfile, selectedRegion); err != nil {
@@ -83,15 +76,8 @@ var createS3BucketCmd = &cobra.Command{
 	Short: "Create an S3 bucket for the project",
 	Long:  "This subcommand allows you to create an S3 bucket for the project with a specified AWS profile and region.",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		// Step 1: Login to AWS
-		selectedProfile, selectedRegion, err := utils.Login()
-		if err != nil {
-			fmt.Println("Error logging in:", err)
-			os.Exit(1)
-		}
-
-		fmt.Println("Login successful!")
+		selectedProfile, selectedRegion := loginOrExit()
 
 		// Step 2: Create S3 Bucket
 		if err := functions.CreateS3(selectedProfile, selectedRegion); err != nil {
@@ -106,17 +92,10 @@ var createGitopsRole = &cobra.Command{
 	Short: "Create an IAM Role for the Gitops in Gitlab",
 	Long:  "This subcommand allows you to create an IAM Role for the project with a specified AWS profile and region.",
 	Run: func(cmd *cobra.Command, args []string) {
-
 		// Step 1: Login to AWS
-		selectedProfile, selectedRegion, err := utils.Login()
-		if err != nil {
-			fmt.Println("Error logging in:", err)
-			os.Exit(1)
-		}
+		selectedProfile, selectedRegion := loginOrExit()
 
-		fmt.Println("Login successful!")
-
-		// Step 2: Create S3 Bucket
+		// Step 2: Create GitOps Role
 		if err := functions.CreateGitopsRole(selectedProfile, selectedRegion); err != nil {
 			fmt.Println("Error:", err)
 			os.Exit(1)
@@ -126,9 +105,19 @@ var createGitopsRole = &cobra.Command{
 
 
 
+func loginOrExit() (string, string) {
+	selectedProfile, selectedRegion, err := utils.Login()
+	if err != nil {
+		fmt.Println("Error logging in:", err)
+		os.Exit(1)
+	}
+	fmt.Println("Login successful!")
+	return selectedProfile, selectedRegion
+}
+
 func init() {
 	rootCmd.AddCommand(initCmd)
-	initCmd.Flags().BoolP("auto-approve", "a" , false, "Skip confirmation prompts and proceed automatically")
+	initCmd.Flags().BoolP("auto-approve", "a", false, "Skip confirmation prompts and proceed automatically")
 
 	initCmd.AddCommand(createS3BucketCmd)
 	initCmd.AddCommand(createGitopsRole)

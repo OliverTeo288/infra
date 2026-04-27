@@ -27,8 +27,14 @@ func InitialiseProject() error {
 	var selectedDomain string
 	switch choice {
 	case "Clone with SSH":
+		if GitlabSshDomain == "" {
+			return fmt.Errorf("GitLab SSH domain is not configured (missing build-time variable)")
+		}
 		selectedDomain = GitlabSshDomain
 	case "Clone with HTTPS":
+		if GitlabHttpsDomain == "" {
+			return fmt.Errorf("GitLab HTTPS domain is not configured (missing build-time variable)")
+		}
 		selectedDomain = GitlabHttpsDomain
 	default:
 		return fmt.Errorf("invalid cloning method selected")

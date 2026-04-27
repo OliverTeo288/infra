@@ -12,6 +12,9 @@ import (
 
 
 func CreateGitopsRole(profile, region string) error {
+		if GitlabHttpsDomain == "" {
+			return errors.New("GitLab HTTPS domain is not configured (missing build-time variable)")
+		}
 
 		validate := func(input string) error {
 			// Regex to allow only alphanumeric characters and dashes, no spaces
