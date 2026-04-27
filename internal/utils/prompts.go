@@ -81,6 +81,7 @@ func FetchAndPromptRegion(profile string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "aws", "ec2", "describe-regions",
 		"--profile", profile,
+		"--region", "us-east-1",
 		"--output", "json",
 	)
 	output, err := cmd.Output()
