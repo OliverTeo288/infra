@@ -14,8 +14,6 @@ func ExecuteECSExec() error {
 		return err
 	}
 
-	fmt.Printf("Login successful!\n")
-
 	// Step 2: Select ECS cluster
 	cluster, err := ecs.SelectECSCluster(selectedProfile, selectedRegion)
 	if err != nil {

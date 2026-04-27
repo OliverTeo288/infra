@@ -33,8 +33,6 @@ func Login() (string, string, error) {
 		return "", "",fmt.Errorf("error selecting AWS profile: %v", err)
 	}
 
-	fmt.Printf("Selected AWS Profile: %s\n", selectedProfile)
-
 	// Handle expired credentials for the selected profile
 	if err := handleExpiredCredentials(selectedProfile); err != nil {
 		return "", "", fmt.Errorf("error handling expired credentials for profile '%s': %v", selectedProfile, err)
@@ -45,9 +43,6 @@ func Login() (string, string, error) {
 	if err != nil {
 		return "", "", fmt.Errorf("error selecting AWS region: %v", err)
 	}
-
-	fmt.Printf("Selected AWS Region: %s\n", selectedRegion)
-	fmt.Println("AWS profile and region.")
 
 	return selectedProfile, selectedRegion, nil
 }

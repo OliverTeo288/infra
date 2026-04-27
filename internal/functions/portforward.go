@@ -18,8 +18,6 @@ func ExecutePortForwarding() error {
 		return err
 	}
 
-	fmt.Printf("Login successful!\n")
-	
 	// // Step 2: Fetch RDS instances and endpoint
 	dbHost, dbPort, err := rds.GetRDSEndpoint(selectedProfile, selectedRegion)
 	if err != nil {
@@ -41,8 +39,6 @@ func ExecutePortForwarding() error {
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Selected Instance ID: %s\n", instanceID)
-
 		err = ec2.StartEC2SSMSession(instanceID, selectedProfile, dbHost, selectedRegion, dbPort)
 		if err != nil {
 			return err

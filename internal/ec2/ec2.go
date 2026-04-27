@@ -24,7 +24,6 @@ func FetchEC2Instances(profile, region string) ([]string, error) {
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	if len(lines) == 0 {
-		fmt.Println("No EC2 instances found.")
 		return nil, fmt.Errorf("no EC2 instances available")
 	}
 

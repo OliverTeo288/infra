@@ -39,6 +39,5 @@ func InitialiseProject() error {
 		return fmt.Errorf("failed to clone repository: %w", err)
 	}
 
-	fmt.Println("Repository successfully cloned.")
 	return nil
 }

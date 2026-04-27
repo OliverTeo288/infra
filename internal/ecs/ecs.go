@@ -19,7 +19,6 @@ func GetECSClusters(profile, region string) ([]string, error) {
 
 	arns := strings.Fields(strings.TrimSpace(string(output)))
 	if len(arns) == 0 {
-		fmt.Println("No ECS clusters found.")
 		return nil, fmt.Errorf("no ECS clusters available")
 	}
 
@@ -52,7 +51,6 @@ func GetECSServices(cluster, profile, region string) ([]string, error) {
 	arns := strings.Fields(strings.TrimSpace(string(output)))
 
 	if len(arns) == 0 {
-		fmt.Println("No ECS services found.")
 		return nil, fmt.Errorf("no ECS services available")
 	}
 	var services []string
@@ -83,7 +81,6 @@ func GetECSTasks(cluster, service, profile, region string) ([]string, error) {
 	arns := strings.Fields(strings.TrimSpace(string(output)))
 
 	if len(arns) == 0 {
-		fmt.Println("No ECS tasks found.")
 		return nil, fmt.Errorf("no ECS tasks available")
 	}
 	var taskIDs []string
@@ -124,7 +121,6 @@ func GetECSContainers(cluster, taskID, profile, region string) ([]string, error)
 	containers := strings.Fields(strings.TrimSpace(string(output)))
 
 	if len(containers) == 0 {
-		fmt.Println("No ECS containers found.")
 		return nil, fmt.Errorf("no ECS containers available")
 	}
 	return containers, nil
