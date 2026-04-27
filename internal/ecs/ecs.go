@@ -18,6 +18,9 @@ func GetECSClusters(profile, region string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "aws", "ecs", "list-clusters", "--query", "clusterArns", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("failed to fetch ECS clusters: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return nil, fmt.Errorf("failed to fetch ECS clusters: %v", err)
 	}
 
@@ -52,6 +55,9 @@ func GetECSServices(cluster, profile, region string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "aws", "ecs", "list-services", "--cluster", cluster, "--query", "serviceArns", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("failed to fetch ECS services: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return nil, fmt.Errorf("failed to fetch ECS services: %v", err)
 	}
 	arns := strings.Fields(strings.TrimSpace(string(output)))
@@ -84,6 +90,9 @@ func GetECSTasks(cluster, service, profile, region string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "aws", "ecs", "list-tasks", "--cluster", cluster, "--service-name", service, "--query", "taskArns", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("failed to fetch ECS tasks: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return nil, fmt.Errorf("failed to fetch ECS tasks: %v", err)
 	}
 	arns := strings.Fields(strings.TrimSpace(string(output)))
@@ -116,6 +125,9 @@ func GetTaskDetails(cluster, taskID, profile, region string) (string, error) {
 	cmd := exec.CommandContext(ctx, "aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", taskID, "--query", "tasks[0].containers[0].runtimeId", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("failed to fetch ECS task details: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return "", fmt.Errorf("failed to fetch ECS task details: %v", err)
 	}
 	return strings.TrimSpace(string(output)), nil
@@ -128,6 +140,9 @@ func GetECSContainers(cluster, taskID, profile, region string) ([]string, error)
 	cmd := exec.CommandContext(ctx, "aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", taskID, "--query", "tasks[0].containers[].name", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("failed to fetch ECS containers: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return nil, fmt.Errorf("failed to fetch ECS containers: %v", err)
 	}
 	containers := strings.Fields(strings.TrimSpace(string(output)))

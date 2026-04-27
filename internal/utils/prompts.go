@@ -85,6 +85,9 @@ func FetchAndPromptRegion(profile string) (string, error) {
 	)
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", fmt.Errorf("failed to fetch regions: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return "", fmt.Errorf("failed to fetch regions: %v", err)
 	}
 

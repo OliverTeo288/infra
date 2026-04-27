@@ -23,6 +23,9 @@ func FetchEC2Instances(profile, region string) ([]string, error) {
 
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("failed to fetch EC2 instances: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return nil, fmt.Errorf("failed to fetch EC2 instances: %v", err)
 	}
 

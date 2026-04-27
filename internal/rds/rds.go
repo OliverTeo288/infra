@@ -63,6 +63,9 @@ func fetchRDSInstances(profile, region string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "aws", "rds", "describe-db-instances", "--query", "DBInstances[].DBInstanceIdentifier", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("failed to fetch RDS instances: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return nil, fmt.Errorf("failed to fetch RDS instances: %v", err)
 	}
 
@@ -79,6 +82,9 @@ func fetchRDSProxies(profile, region string) ([]string, error) {
 	cmd := exec.CommandContext(ctx, "aws", "rds", "describe-db-proxies", "--query", "DBProxies[].DBProxyName", "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("%s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return nil, err
 	}
 
@@ -97,6 +103,9 @@ func fetchInstanceEndpoint(identifier, profile, region string) (string, int, err
 
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", 0, fmt.Errorf("failed to fetch instance endpoint: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return "", 0, fmt.Errorf("failed to fetch instance endpoint: %v", err)
 	}
 
@@ -118,6 +127,9 @@ func fetchProxyEndpoint(identifier, profile, region string) (string, int, error)
 
 	output, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return "", 0, fmt.Errorf("failed to fetch proxy endpoint: %s", strings.TrimSpace(string(exitErr.Stderr)))
+		}
 		return "", 0, fmt.Errorf("failed to fetch proxy endpoint: %v", err)
 	}
 
