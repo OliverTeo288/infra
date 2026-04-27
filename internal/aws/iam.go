@@ -2,16 +2,41 @@ package aws
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"crypto/sha1"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+)
+
+// ECR permission sets following least privilege principle.
+var (
+	ECRReadActions = []string{
+		"ecr:BatchCheckLayerAvailability",
+		"ecr:GetDownloadUrlForLayer",
+		"ecr:GetRepositoryPolicy",
+		"ecr:DescribeRepositories",
+		"ecr:ListImages",
+		"ecr:DescribeImages",
+		"ecr:BatchGetImage",
+		"ecr:GetLifecyclePolicy",
+		"ecr:GetLifecyclePolicyPreview",
+		"ecr:ListTagsForResource",
+		"ecr:DescribeImageScanFindings",
+	}
+
+	ECRWriteActions = []string{
+		"ecr:PutImage",
+		"ecr:InitiateLayerUpload",
+		"ecr:UploadLayerPart",
+		"ecr:CompleteLayerUpload",
+		"ecr:BatchCheckLayerAvailability",
+	}
 )
 
 // LoadAWSConfig loads the AWS configuration for the given profile and region.
@@ -100,7 +125,7 @@ func CreateIAMRole(iamClient *iam.Client, roleName, trustPolicy string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create role: %w", err)
 	}
-  fmt.Printf("Role %q created successfully. ARN: %s\n", roleName, *result.Role.Arn)
+	fmt.Printf("Role %q created successfully. ARN: %s\n", roleName, *result.Role.Arn)
 	return nil
 }
 
@@ -135,31 +160,21 @@ func AttachInlinePolicy(iamClient *iam.Client, roleName string) error {
 	return nil
 }
 
-// AttachECRInlinePolicy attaches ECR-specific inline policy to the specified role.
-func AttachECRInlinePolicy(iamClient *iam.Client, roleName, accountID string) error {
+// AttachECRPolicy attaches an ECR inline policy with the given actions to the specified role.
+// Actions are scoped to the account's repositories following least privilege.
+func AttachECRPolicy(iamClient *iam.Client, roleName, policyName, accountID string, actions []string) error {
 	inlinePolicy := map[string]interface{}{
 		"Version": "2012-10-17",
 		"Statement": []map[string]interface{}{
 			{
-				"Effect": "Allow",
-				"Action": []string{
-					"ecr:GetAuthorizationToken",
-					"ecr:DescribeImages",
-				},
+				"Effect":   "Allow",
+				"Action":   []string{"ecr:GetAuthorizationToken"},
 				"Resource": "*",
 			},
 			{
-				"Effect": "Allow",
-				"Action": []string{
-					"ecr:BatchCheckLayerAvailability",
-					"ecr:GetDownloadUrlForLayer",
-					"ecr:BatchGetImage",
-					"ecr:DescribeRepositories",
-					"ecr:ListImages",
-				},
-				"Resource": []string{
-					fmt.Sprintf("arn:aws:ecr:ap-southeast-1:%s:repository/*", accountID),
-				},
+				"Effect":   "Allow",
+				"Action":   actions,
+				"Resource": fmt.Sprintf("arn:aws:ecr:*:%s:repository/*", accountID),
 			},
 		},
 	}
@@ -169,48 +184,40 @@ func AttachECRInlinePolicy(iamClient *iam.Client, roleName, accountID string) er
 		return fmt.Errorf("failed to marshal ECR inline policy: %w", err)
 	}
 
-	putRolePolicyInput := &iam.PutRolePolicyInput{
+	_, err = iamClient.PutRolePolicy(context.TODO(), &iam.PutRolePolicyInput{
 		RoleName:       aws.String(roleName),
-		PolicyName:     aws.String(fmt.Sprintf("%sPolicy", roleName)),
+		PolicyName:     aws.String(policyName),
 		PolicyDocument: aws.String(string(inlinePolicyJSON)),
-	}
-
-	_, err = iamClient.PutRolePolicy(context.TODO(), putRolePolicyInput)
+	})
 	if err != nil {
 		return fmt.Errorf("failed to attach ECR inline policy to role: %w", err)
 	}
 	return nil
 }
 
-// Main function to create the role and attach the policy.
+// SetupRole creates a GitOps IAM role with trust policy and admin inline policy.
 func SetupRole(profile, region, roleName string) error {
-	// Load AWS configuration
 	cfg, err := LoadAWSConfig(profile, region)
 	if err != nil {
 		return err
 	}
 
-	// Get AWS account ID
 	accountID, err := GetAWSAccountID(cfg)
 	if err != nil {
 		return err
 	}
 
-	// Generate trust policy
 	trustPolicy, err := CreateTrustPolicy(accountID)
 	if err != nil {
 		return err
 	}
 
-	// Create an IAM client
 	iamClient := iam.NewFromConfig(cfg)
 
-	// Create IAM role
 	if err := CreateIAMRole(iamClient, roleName, trustPolicy); err != nil {
 		return err
 	}
 
-	// Attach inline policy
 	if err := AttachInlinePolicy(iamClient, roleName); err != nil {
 		return err
 	}
@@ -218,36 +225,30 @@ func SetupRole(profile, region, roleName string) error {
 	return nil
 }
 
-// SetupECRRole creates an ECR role with cross-account trust and ECR permissions.
-func SetupECRRole(profile, region, roleName, commonAccountID string) error {
-	// Load AWS configuration
+// SetupECRRole creates an ECR role with cross-account trust and the specified ECR permissions.
+func SetupECRRole(profile, region, roleName, commonAccountID string, actions []string) error {
 	cfg, err := LoadAWSConfig(profile, region)
 	if err != nil {
 		return err
 	}
 
-	// Get AWS account ID
 	accountID, err := GetAWSAccountID(cfg)
 	if err != nil {
 		return err
 	}
 
-	// Generate ECR trust policy
 	trustPolicy, err := CreateECRTrustPolicy(commonAccountID)
 	if err != nil {
 		return err
 	}
 
-	// Create an IAM client
 	iamClient := iam.NewFromConfig(cfg)
 
-	// Create IAM role
 	if err := CreateIAMRole(iamClient, roleName, trustPolicy); err != nil {
 		return err
 	}
 
-	// Attach ECR inline policy
-	if err := AttachECRInlinePolicy(iamClient, roleName, accountID); err != nil {
+	if err := AttachECRPolicy(iamClient, roleName, fmt.Sprintf("%sPolicy", roleName), accountID, actions); err != nil {
 		return err
 	}
 
@@ -256,20 +257,17 @@ func SetupECRRole(profile, region, roleName, commonAccountID string) error {
 
 // FetchThumbprint retrieves the SHA-1 thumbprint of the SSL certificate for a given URL.
 func FetchThumbprint(url string) (string, error) {
-	// Create a HTTP client and fetch the TLS certificate from the GitLab URL
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", fmt.Errorf("failed to fetch the certificate from URL: %w", err)
 	}
 	defer resp.Body.Close()
 
-	// Extract the TLS certificate from the response
 	certs := resp.TLS.PeerCertificates
 	if len(certs) == 0 {
 		return "", fmt.Errorf("no certificates found for URL: %s", url)
 	}
 
-	// Compute the SHA-1 fingerprint of the first certificate in the chain
 	cert := certs[0]
 	thumbprint := sha1.Sum(cert.Raw)
 	return hex.EncodeToString(thumbprint[:]), nil
@@ -277,7 +275,6 @@ func FetchThumbprint(url string) (string, error) {
 
 // CreateOIDCProvider creates an AWS OpenID Connect (OIDC) Provider for GitLab.
 func CreateOIDCProvider(profile, region, gitURL string) error {
-	// Load AWS configuration
 	cfg, err := config.LoadDefaultConfig(context.TODO(),
 		config.WithRegion(region),
 		config.WithSharedConfigProfile(profile),
@@ -288,22 +285,19 @@ func CreateOIDCProvider(profile, region, gitURL string) error {
 
 	iamClient := iam.NewFromConfig(cfg)
 
-	// Fetch the thumbprint of the GitLab URL's certificate
 	thumbprint, err := FetchThumbprint(gitURL)
 	if err != nil {
-		return fmt.Errorf("failed to fetch thumbprint: %w", err)	
+		return fmt.Errorf("failed to fetch thumbprint: %w", err)
 	}
 
-	// Create OpenID Connect provider
 	oidcInput := &iam.CreateOpenIDConnectProviderInput{
 		Url:            aws.String(gitURL),
 		ClientIDList:   []string{gitURL},
 		ThumbprintList: []string{thumbprint},
 	}
 
-	
 	if _, err := iamClient.CreateOpenIDConnectProvider(context.TODO(), oidcInput); err != nil {
-			return fmt.Errorf("GitLab OIDC provider exists: %w", err)
+		return fmt.Errorf("GitLab OIDC provider exists: %w", err)
 	}
 
 	fmt.Println("OIDC Provider created successfully")

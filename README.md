@@ -10,7 +10,8 @@
   1. Creating Terraform GitOps templates.
   2. Creating an S3 state bucket for Terraform.
   3. Creating an IAM role for GitOps integration.
-- **`infra ecrrole`**: Creates an IAM role named 'ecrreader' with ECR pull permissions and cross-account trust relationship.
+- **`infra ecr read`**: Creates an IAM role named 'ecrreader' with read-only ECR permissions and cross-account trust relationship.
+- **`infra ecr write`**: Creates an IAM role named 'ecrwriter' with ECR push permissions and cross-account trust relationship.
 
 ## Installation via Homebrew
 
@@ -69,14 +70,20 @@ The `init` command sets up your repository and AWS resources for Terraform GitOp
 -   Creating an S3 bucket for Terraform state management.
 -   Creating an IAM role for Terraform GitOps.
 
-#### 4\. **`infra ecrrole`**
+#### 4\. **`infra ecr read`**
 
-This command creates an IAM role named 'ecrreader' with permissions to pull ECR images and establishes a cross-account trust relationship.
-
-Example usage:
+Creates an IAM role named 'ecrreader' with read-only ECR permissions (pull, describe, list) and cross-account trust.
 
 ```
-infra ecrrole
+infra ecr read
+```
+
+#### 5\. **`infra ecr write`**
+
+Creates an IAM role named 'ecrwriter' with ECR push permissions (upload, put image) and cross-account trust.
+
+```
+infra ecr write
 ```
 
 ##### Auto-approve Option
@@ -242,9 +249,9 @@ Required permissions for initializing Terraform GitOps setup:
 }
 ```
 
-### `infra ecrrole`
+### `infra ecr read` / `infra ecr write`
 
-Required permissions for creating ECR reader role:
+Required permissions for creating ECR roles:
 
 ```json
 {
@@ -256,7 +263,10 @@ Required permissions for creating ECR reader role:
         "iam:CreateRole",
         "iam:PutRolePolicy"
       ],
-      "Resource": "arn:aws:iam::*:role/ecrreader"
+      "Resource": [
+        "arn:aws:iam::*:role/ecrreader",
+        "arn:aws:iam::*:role/ecrwriter"
+      ]
     },
     {
       "Effect": "Allow",
