@@ -118,11 +118,12 @@ func SelectECSTask(cluster, service, profile, region string) (string, error) {
 	return utils.PromptSelection(tasks, "ECS Task")
 }
 
-// Fetches the details for an ECS task
-func GetTaskDetails(cluster, taskID, profile, region string) (string, error) {
+// Fetches the runtime ID for a specific container in an ECS task
+func GetTaskDetails(cluster, taskID, containerName, profile, region string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", taskID, "--query", "tasks[0].containers[0].runtimeId", "--output", "text", "--profile", profile, "--region", region)
+	query := fmt.Sprintf("tasks[0].containers[?name==`%s`].runtimeId | [0]", containerName)
+	cmd := exec.CommandContext(ctx, "aws", "ecs", "describe-tasks", "--cluster", cluster, "--tasks", taskID, "--query", query, "--output", "text", "--profile", profile, "--region", region)
 	output, err := cmd.Output()
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -130,7 +131,11 @@ func GetTaskDetails(cluster, taskID, profile, region string) (string, error) {
 		}
 		return "", fmt.Errorf("failed to fetch ECS task details: %v", err)
 	}
-	return strings.TrimSpace(string(output)), nil
+	runtimeID := strings.TrimSpace(string(output))
+	if runtimeID == "" || runtimeID == "None" {
+		return "", fmt.Errorf("no runtime ID found for container %s in task %s", containerName, taskID)
+	}
+	return runtimeID, nil
 }
 
 // Fetches the container names for a given task
