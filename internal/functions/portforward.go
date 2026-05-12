@@ -57,11 +57,11 @@ func ExecutePortForwarding() error {
 		if err != nil {
 			return err
 		}
-		runtimeID, err := ecs.GetTaskDetails(cluster, taskID, selectedProfile, selectedRegion)
+		containerName, err := ecs.SelectECSContainer(cluster, taskID, selectedProfile, selectedRegion)
 		if err != nil {
 			return err
 		}
-		containerName, err := ecs.SelectECSContainer(cluster, taskID, selectedProfile, selectedRegion)
+		runtimeID, err := ecs.GetTaskDetails(cluster, taskID, containerName, selectedProfile, selectedRegion)
 		if err != nil {
 			return err
 		}
