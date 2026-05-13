@@ -17,6 +17,9 @@ permissions:
   contents: read
 
 jobs:
+  # ----------------------------------------------------------------------
+  # lint — gofmt, go vet, staticcheck
+  # ----------------------------------------------------------------------
   lint:
     name: Lint & format
     runs-on: ubuntu-latest
@@ -30,23 +33,52 @@ jobs:
           cache: true
 
       - name: gofmt
+        id: gofmt
         run: |
           unformatted=$(gofmt -l .)
           if [ -n "$unformatted" ]; then
             echo "::error::Files need gofmt:"
             echo "$unformatted"
+            echo "files<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$unformatted" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
             exit 1
           fi
 
       - name: go vet
+        id: vet
         run: go vet ./...
 
       - name: staticcheck
+        id: staticcheck
         uses: dominikh/staticcheck-action@v1
         with:
           version: "latest"
           install-go: false
 
+      - name: Lint summary
+        if: always()
+        run: |
+          {
+            echo "## Lint report"
+            echo ""
+            echo "| Check | Result |"
+            echo "| --- | --- |"
+            echo "| gofmt | ${{ steps.gofmt.outcome == 'success' && ':white_check_mark: pass' || ':x: fail' }} |"
+            echo "| go vet | ${{ steps.vet.outcome == 'success' && ':white_check_mark: pass' || ':x: fail' }} |"
+            echo "| staticcheck | ${{ steps.staticcheck.outcome == 'success' && ':white_check_mark: pass' || ':x: fail' }} |"
+            if [ -n "${{ steps.gofmt.outputs.files }}" ]; then
+              echo ""
+              echo "**Unformatted files:**"
+              echo '```'
+              echo "${{ steps.gofmt.outputs.files }}"
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ----------------------------------------------------------------------
+  # unit — build + race-tested unit tests, with a pass/fail breakdown
+  # ----------------------------------------------------------------------
   unit:
     name: Unit tests
     runs-on: ubuntu-latest
@@ -58,11 +90,132 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
       - name: Build
         run: go build ./...
-      - name: Test
-        run: go test -race -count=1 ./...
 
+      - name: Test (JSON output for summary)
+        id: test
+        run: |
+          set -o pipefail
+          go test -race -count=1 -json ./... | tee /tmp/test-output.json
+        continue-on-error: true
+
+      - name: Test summary
+        if: always()
+        run: |
+          summarise_go_test_json() {
+            local f="$1"
+            if [ ! -s "$f" ]; then
+              echo "_no test output captured_"
+              return
+            fi
+            local passed failed skipped
+            passed=$(jq -s '[.[] | select(.Action == "pass" and .Test)] | length' "$f")
+            failed=$(jq -s '[.[] | select(.Action == "fail" and .Test)] | length' "$f")
+            skipped=$(jq -s '[.[] | select(.Action == "skip" and .Test)] | length' "$f")
+            echo "| Status | Count |"
+            echo "| --- | --- |"
+            echo "| :white_check_mark: Passed | $passed |"
+            echo "| :x: Failed | $failed |"
+            echo "| :fast_forward: Skipped | $skipped |"
+            if [ "$failed" -gt 0 ]; then
+              echo ""
+              echo "**Failed tests:**"
+              echo '```'
+              jq -r 'select(.Action == "fail" and .Test) | "\(.Package)\t\(.Test)"' "$f" | sort -u
+              echo '```'
+            fi
+          }
+          {
+            echo "## Unit test report"
+            echo ""
+            summarise_go_test_json /tmp/test-output.json
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Re-raise the failure now that the summary has been written.
+          if [ "${{ steps.test.outcome }}" != "success" ]; then
+            exit 1
+          fi
+
+  # ----------------------------------------------------------------------
+  # security — Trivy filesystem scan (deps + secrets + misconfig)
+  # Findings are uploaded to GitHub Security tab as SARIF and summarised
+  # inline on every run.
+  # ----------------------------------------------------------------------
+  security:
+    name: Security scan (Trivy)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy fs scan (SARIF for code-scanning)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          # Skip vulns without a known fix to reduce noise; flip to false
+          # if you want a paranoid view.
+          ignore-unfixed: true
+          # Don't fail the job here — we still want the SARIF uploaded
+          # and the summary written. The summary step decides exit code.
+          exit-code: 0
+
+      - name: Upload Trivy SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-fs
+
+      - name: Trivy fs scan (table for job summary)
+        id: trivy_table
+        if: always()
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          output: trivy-table.txt
+          severity: CRITICAL,HIGH,MEDIUM
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Security summary
+        if: always()
+        run: |
+          {
+            echo "## Security scan report (Trivy)"
+            echo ""
+            if [ ! -s trivy-table.txt ] \
+               || ! grep -q -E "CRITICAL|HIGH|MEDIUM" trivy-table.txt; then
+              echo ":white_check_mark: No CRITICAL / HIGH / MEDIUM findings."
+            else
+              echo "<details><summary>Findings (CRITICAL / HIGH / MEDIUM)</summary>"
+              echo ""
+              echo '```'
+              cat trivy-table.txt
+              echo '```'
+              echo ""
+              echo "</details>"
+              echo ""
+              echo "See the [Security tab](https://github.com/${{ github.repository }}/security/code-scanning) for the SARIF view."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Propagate the trivy-action exit code so the job fails on findings.
+          if [ "${{ steps.trivy_table.outcome }}" != "success" ]; then
+            exit 1
+          fi
+
+  # ----------------------------------------------------------------------
+  # integration — boots floci in a service container, runs the
+  # `-tags=integration` suite against it.
+  # ----------------------------------------------------------------------
   integration:
     name: Integration tests (floci)
     runs-on: ubuntu-latest
@@ -97,15 +250,47 @@ jobs:
           exit 1
 
       - name: Run integration tests
+        id: integration
         env:
           FLOCI_ENDPOINT: http://localhost:4566
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
           AWS_REGION: us-east-1
-        run: go test -tags=integration -count=1 ./...
+        run: |
+          set -o pipefail
+          go test -tags=integration -count=1 -json ./... | tee /tmp/integration-output.json
+        continue-on-error: true
 
-      # Surface floci container logs whenever a step in this job fails so
-      # we don't have to re-run with debug logging to diagnose.
+      - name: Integration summary
+        if: always()
+        run: |
+          {
+            echo "## Integration test report (floci)"
+            echo ""
+            if [ -s /tmp/integration-output.json ]; then
+              passed=$(jq -s '[.[] | select(.Action == "pass" and .Test)] | length' /tmp/integration-output.json)
+              failed=$(jq -s '[.[] | select(.Action == "fail" and .Test)] | length' /tmp/integration-output.json)
+              skipped=$(jq -s '[.[] | select(.Action == "skip" and .Test)] | length' /tmp/integration-output.json)
+              echo "| Status | Count |"
+              echo "| --- | --- |"
+              echo "| :white_check_mark: Passed | $passed |"
+              echo "| :x: Failed | $failed |"
+              echo "| :fast_forward: Skipped (emulator unsupported / no DNS) | $skipped |"
+              if [ "$failed" -gt 0 ]; then
+                echo ""
+                echo "**Failed tests:**"
+                echo '```'
+                jq -r 'select(.Action == "fail" and .Test) | "\(.Package)\t\(.Test)"' /tmp/integration-output.json | sort -u
+                echo '```'
+              fi
+            else
+              echo "_no integration test output captured_"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.integration.outcome }}" != "success" ]; then
+            exit 1
+          fi
+
       - name: Show floci logs on failure
         if: failure()
         run: docker logs "${{ job.services.floci.id }}" 2>&1 | tail -200

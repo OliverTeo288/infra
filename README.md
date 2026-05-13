@@ -210,11 +210,14 @@ This is the same code path used by the integration tests and by `scripts/test-fl
 
 ### CI
 
-`.github/workflows/ci.yml` runs three jobs on every push/PR and daily at 02:00 SGT (GMT+8):
+`.github/workflows/ci.yml` runs four jobs on every push/PR and daily at 02:00 SGT (GMT+8):
 
 - **lint** — `gofmt`, `go vet`, `staticcheck`
-- **unit** — `go build` + `go test -race`
+- **unit** — `go build` + `go test -race`, with a pass/fail/skip breakdown
+- **security** — Trivy filesystem scan (Go dependencies, secrets, misconfig); findings uploaded to the GitHub Security tab as SARIF
 - **integration** — boots a floci service container and runs `go test -tags=integration`
+
+Every job writes a markdown report to `$GITHUB_STEP_SUMMARY`, so a single click on a workflow run shows lint results, test counts, security findings, and failed-test names without drilling into logs.
 
 The daily schedule catches AWS SDK minor releases, floci API drift, and dependency vulnerability advisories before they land in a release.
 
