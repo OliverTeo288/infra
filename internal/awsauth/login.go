@@ -41,6 +41,18 @@ var expiredCredsErrorCodes = map[string]struct{}{
 	"AccessDenied":                {},
 }
 
+// expiredCredsErrorPhrases catches SDK-side credential-resolution failures
+// that surface before any STS call is made — typically when a cached SSO
+// token has expired. These come through as opaque wrapped errors (not
+// smithy.APIError), so a substring sniff is the pragmatic check.
+var expiredCredsErrorPhrases = []string{
+	"SSO session has expired",
+	"SSO session is invalid",
+	"failed to refresh cached credentials",
+	"no valid providers in chain",
+	"InvalidGrantException",
+}
+
 // Login walks the user through profile selection, credential refresh, and
 // region selection. Returns the selected profile and region. When no
 // profiles are configured, runs `aws configure sso` and then recurses so
@@ -159,15 +171,31 @@ func refreshIfExpired(ctx context.Context, profile string) error {
 	return nil
 }
 
-// isExpiredCredsError reports whether err looks like an AWS API error
-// indicating the caller needs to re-authenticate.
+// isExpiredCredsError reports whether err indicates the caller needs to
+// re-authenticate. Two cases:
+//
+//  1. AWS returned a typed APIError whose code is in expiredCredsErrorCodes
+//     (e.g. ExpiredToken from a successful-but-stale STS call).
+//  2. SDK credential resolution failed before any AWS call was made
+//     (e.g. cached SSO token expired). These come through as opaque
+//     wrapped errors and we substring-match against well-known phrases.
 func isExpiredCredsError(err error) bool {
-	var apiErr smithy.APIError
-	if !errors.As(err, &apiErr) {
+	if err == nil {
 		return false
 	}
-	_, ok := expiredCredsErrorCodes[apiErr.ErrorCode()]
-	return ok
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		if _, ok := expiredCredsErrorCodes[apiErr.ErrorCode()]; ok {
+			return true
+		}
+	}
+	msg := err.Error()
+	for _, phrase := range expiredCredsErrorPhrases {
+		if strings.Contains(msg, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 // promptRegion fetches the list of AWS regions via the SDK (using profile
