@@ -1,0 +1,14 @@
+# Built binary
+/infra
+
+# Go build artifacts
+*.test
+*.out
+coverage.txt
+
+# Local env / IDE
+.env
+.env.local
+.idea/
+.vscode/
+.DS_Store

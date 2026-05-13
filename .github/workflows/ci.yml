@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Daily at 02:00 SGT (18:00 UTC the previous day) catches dependency
+    # drift, floci API changes, and AWS SDK breaking minor releases between
+    # active development. GitHub Actions cron expressions are always in
+    # UTC — convert from SGT (GMT+8) by subtracting 8 hours.
+    - cron: "0 18 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint & format
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "::error::Files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: "latest"
+          install-go: false
+
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build
+        run: go build ./...
+      - name: Test
+        run: go test -race -count=1 ./...
+
+  integration:
+    name: Integration tests (floci)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    services:
+      floci:
+        image: floci/floci:latest
+        ports:
+          - 4566:4566
+        # Floci is a local AWS API emulator (LocalStack alternative).
+        # The CLI's read paths (ECS / EC2 / RDS / IAM / S3 / STS) are pointed
+        # here via FLOCI_ENDPOINT and tested with the build tag `integration`.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Wait for floci
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:4566/_floci/health 2>/dev/null \
+               || curl -fsS http://localhost:4566 2>/dev/null; then
+              echo "floci is up"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::floci never became healthy"
+          exit 1
+
+      - name: Run integration tests
+        env:
+          FLOCI_ENDPOINT: http://localhost:4566
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+          AWS_REGION: us-east-1
+        run: go test -tags=integration -count=1 ./...
+
+      # Surface floci container logs whenever a step in this job fails so
+      # we don't have to re-run with debug logging to diagnose.
+      - name: Show floci logs on failure
+        if: failure()
+        run: docker logs "${{ job.services.floci.id }}" 2>&1 | tail -200

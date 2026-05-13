@@ -2,126 +2,102 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
-  "raid/infra/internal/functions"
-	"raid/infra/internal/utils"
+	"raid/infra/internal/flows"
+	"raid/infra/internal/observability"
+	"raid/infra/internal/prompt"
 
 	"github.com/spf13/cobra"
 )
 
+var autoApprove bool
 
 var initCmd = &cobra.Command{
 	Use:   "init",
-	Short: "Initialise the project by cloning the repository",
-	Long: `This command initialises the project by cloning a specified repository.
-Ensure you have the required access before running this command.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Check if the `--auto-approve` flag is set
-		autoApprove, err := cmd.Flags().GetBool("auto-approve")
+	Short: "Bootstrap a project: clone template, create S3 state bucket, create GitOps role",
+	Long: `Initialise a project end-to-end:
+  1. Clone the templated repo
+  2. Create the S3 bucket for Terraform remote state
+  3. Create the GitOps IAM role + OIDC provider
+
+Use --auto-approve to skip the between-step confirmation prompts.`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx := cmd.Context()
+		log := observability.FromContext(ctx)
+
+		if err := flows.InitialiseProject(); err != nil {
+			return err
+		}
+
+		if !autoApprove && !prompt.Confirm("Do you want to proceed to creating S3 terraform state bucket? (Y/N)") {
+			log.Info("init_step_skipped", "step", "s3_bucket", "reason", "user_declined")
+			fmt.Println("Exiting script.")
+			return nil
+		}
+
+		profile, region, err := login(ctx)
 		if err != nil {
-			fmt.Println("Error parsing flags:", err)
-			os.Exit(1)
+			// The cloning step has already completed; surface that so the
+			// user knows there are files in CWD they may want to clean up.
+			fmt.Fprintln(cmd.ErrOrStderr(),
+				"Warning: template repo was cloned into the current directory. "+
+					"You may want to remove those files before retrying.")
+			return err
 		}
 
-		// Execute the initialization logic
-		if err := functions.InitialiseProject(); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
+		if err := flows.CreateS3StateBucket(ctx, profile, region); err != nil {
+			return err
 		}
 
-		// Prompt to continue if not auto-approved
-		if !autoApprove && !utils.ConfirmPrompt("Do you want to proceed to creating S3 terraform state bucket? (Y/N)") {
+		if !autoApprove && !prompt.Confirm("Do you want to proceed to GitOps role creation? (Y/N)") {
+			log.Info("init_step_skipped", "step", "gitops_role", "reason", "user_declined")
 			fmt.Println("Exiting script.")
-			return
+			return nil
 		}
 
-		// Step 1: Login to AWS
-		selectedProfile, selectedRegion := loginOrExit()
-
-		// Step 2: Create S3 Bucket
-		if err := functions.CreateS3(selectedProfile, selectedRegion); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
-
-		// Prompt to continue if not auto-approved
-		if !autoApprove && !utils.ConfirmPrompt("Do you want to proceed to GitOps role creation? (Y/N)") {
-			fmt.Println("Exiting script.")
-			return
-		}
-
-		// Step 3: Create GitOps Role
-		if err := functions.CreateGitopsRole(selectedProfile, selectedRegion); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
+		return flows.CreateGitOpsRole(ctx, profile, region)
 	},
 }
 
-var initiliseProject = &cobra.Command{
+var initRepoCmd = &cobra.Command{
 	Use:   "repo",
-	Short: "Clones RAiD's templated project from SHIPHATS GitLab",
-	Long:  "This subcommand allows you to clone templated project which meant for DevOps engineer to work with.",
-	Run: func(cmd *cobra.Command, args []string) {
-		if err := functions.InitialiseProject(); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
+	Short: "Clone the templated project repository only",
+	Long:  "Subcommand: clone the templated DevOps repo without creating any AWS resources.",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return flows.InitialiseProject()
 	},
 }
 
-var createS3BucketCmd = &cobra.Command{
+var initS3Cmd = &cobra.Command{
 	Use:   "s3",
-	Short: "Create an S3 bucket for the project",
-	Long:  "This subcommand allows you to create an S3 bucket for the project with a specified AWS profile and region.",
-	Run: func(cmd *cobra.Command, args []string) {
-		// Step 1: Login to AWS
-		selectedProfile, selectedRegion := loginOrExit()
-
-		// Step 2: Create S3 Bucket
-		if err := functions.CreateS3(selectedProfile, selectedRegion); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
+	Short: "Create the S3 Terraform state bucket only",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		profile, region, err := login(cmd.Context())
+		if err != nil {
+			return err
 		}
+		return flows.CreateS3StateBucket(cmd.Context(), profile, region)
 	},
 }
 
-var createGitopsRole = &cobra.Command{
+var initRoleCmd = &cobra.Command{
 	Use:   "role",
-	Short: "Create an IAM Role for the Gitops in Gitlab",
-	Long:  "This subcommand allows you to create an IAM Role for the project with a specified AWS profile and region.",
-	Run: func(cmd *cobra.Command, args []string) {
-		// Step 1: Login to AWS
-		selectedProfile, selectedRegion := loginOrExit()
-
-		// Step 2: Create GitOps Role
-		if err := functions.CreateGitopsRole(selectedProfile, selectedRegion); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
+	Short: "Create the GitOps IAM role + OIDC provider only",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		profile, region, err := login(cmd.Context())
+		if err != nil {
+			return err
 		}
+		return flows.CreateGitOpsRole(cmd.Context(), profile, region)
 	},
-}
-
-
-
-func loginOrExit() (string, string) {
-	selectedProfile, selectedRegion, err := utils.Login()
-	if err != nil {
-		fmt.Println("Error logging in:", err)
-		os.Exit(1)
-	}
-	fmt.Println("Login successful!")
-	return selectedProfile, selectedRegion
 }
 
 func init() {
+	initCmd.Flags().BoolVarP(&autoApprove, "auto-approve", "a", false,
+		"Skip confirmation prompts between steps")
+
+	initCmd.AddCommand(initRepoCmd)
+	initCmd.AddCommand(initS3Cmd)
+	initCmd.AddCommand(initRoleCmd)
 	rootCmd.AddCommand(initCmd)
-	initCmd.Flags().BoolP("auto-approve", "a", false, "Skip confirmation prompts and proceed automatically")
-
-	initCmd.AddCommand(createS3BucketCmd)
-	initCmd.AddCommand(createGitopsRole)
-	initCmd.AddCommand(initiliseProject)
 }
-
-

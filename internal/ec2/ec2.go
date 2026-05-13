@@ -1,3 +1,6 @@
+// Package ec2 wraps the AWS EC2 API calls used by the CLI's portforward flow:
+// listing instances for selection, and starting an SSM port-forwarding session
+// (delegated to the AWS CLI, which has the session-manager-plugin needed).
 package ec2
 
 import (
@@ -8,90 +11,99 @@ import (
 	"strings"
 	"time"
 
-	"raid/infra/internal/utils"
+	"raid/infra/internal/awscfg"
+	"raid/infra/internal/prompt"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 )
 
-// Retrieves a list of EC2 instances with their instance IDs and names.
-func FetchEC2Instances(profile, region string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, "aws", "ec2", "describe-instances",
-		"--query", "Reservations[].Instances[].[InstanceId, Tags[?Key=='Name'].Value | [0], State.Name]",
-		"--output", "text",
-		"--profile", profile,
-		"--region", region)
+const apiTimeout = 30 * time.Second
 
-	output, err := cmd.Output()
+// FetchInstances returns display-friendly EC2 instance entries:
+//
+//	"<instance-id> - <name|(No Name)> [<state>]"
+func FetchInstances(profile, region string) ([]string, error) {
+	cfg, err := awscfg.LoadConfig(profile, region)
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("failed to fetch EC2 instances: %s", strings.TrimSpace(string(exitErr.Stderr)))
-		}
-		return nil, fmt.Errorf("failed to fetch EC2 instances: %v", err)
+		return nil, err
 	}
 
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	if len(lines) == 0 {
+	ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
+	defer cancel()
+	client := ec2.NewFromConfig(cfg)
+
+	var out []string
+	paginator := ec2.NewDescribeInstancesPaginator(client, &ec2.DescribeInstancesInput{})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to describe EC2 instances: %w", err)
+		}
+		for _, r := range page.Reservations {
+			for _, inst := range r.Instances {
+				out = append(out, fmt.Sprintf("%s - %s [%s]",
+					aws.ToString(inst.InstanceId),
+					nameFromTags(inst.Tags),
+					string(inst.State.Name),
+				))
+			}
+		}
+	}
+
+	if len(out) == 0 {
 		return nil, fmt.Errorf("no EC2 instances available")
 	}
-
-	var instances []string
-	for _, line := range lines {
-		fields := strings.Fields(line)
-		if len(fields) >= 3 {
-			instanceID := fields[0]
-			instanceName := strings.Join(fields[1:len(fields)-1], " ")
-			instanceState := fields[len(fields)-1]
-			instances = append(instances, fmt.Sprintf("%s - %s [%s]", instanceID, instanceName, instanceState))
-		} else if len(fields) == 2 {
-			instanceID := fields[0]
-			instanceState := fields[1]
-			instances = append(instances, fmt.Sprintf("%s - (No Name) [%s]", instanceID, instanceState))
-		}
-	}
-
-	return instances, nil
+	return out, nil
 }
-// Prompts the user to select an EC2 instance by its ID and Name.
-func SelectEC2Instance(profile, region string) (string, error) {
-	instances, err := FetchEC2Instances(profile, region)
+
+// SelectInstance prompts the user to pick an EC2 instance and returns its ID.
+func SelectInstance(profile, region string) (string, error) {
+	instances, err := FetchInstances(profile, region)
 	if err != nil {
 		return "", err
 	}
-
-	selectedInstance, err := utils.PromptSelection(instances, "EC2 Instance")
+	selected, err := prompt.Selection(instances, "EC2 Instance")
 	if err != nil {
 		return "", err
 	}
-
-	// Extract the instance ID from the selection
-	instanceID := strings.Fields(selectedInstance)[0]
-	return instanceID, nil
+	return strings.Fields(selected)[0], nil
 }
 
-// StartSSMSession starts an SSM session with the selected EC2 instance.
-func StartEC2SSMSession(instanceID, profile, dbHost, region string, dbPort int) error {
-	localPort, err := utils.PromptLocalPortNumber()
+// StartSSMSession starts a port-forwarding SSM session via the AWS CLI.
+// Requires session-manager-plugin to be installed on the user's machine.
+func StartSSMSession(instanceID, profile, dbHost, region string, dbPort int) error {
+	localPort, err := prompt.LocalPort()
 	if err != nil {
 		return err
 	}
 
 	fmt.Printf("Starting SSM session with instance ID: %s\n", instanceID)
 
-		// Run the AWS CLI command to start the SSM session
 	cmd := exec.Command("aws", "ssm", "start-session",
 		"--target", instanceID,
 		"--document-name", "AWS-StartPortForwardingSessionToRemoteHost",
-		"--parameters", fmt.Sprintf(`{"host":["%s"],"portNumber":["%d"],"localPortNumber":["%d"]}`, dbHost, dbPort ,localPort),
-		"--profile", profile, "--region", region)
-
-
+		"--parameters", fmt.Sprintf(`{"host":["%s"],"portNumber":["%d"],"localPortNumber":["%d"]}`, dbHost, dbPort, localPort),
+		"--profile", profile, "--region", region,
+	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to start SSM session: %v", err)
+		return fmt.Errorf("failed to start SSM session: %w", err)
 	}
 
 	fmt.Println("SSM session started successfully.")
 	return nil
+}
+
+func nameFromTags(tags []ec2types.Tag) string {
+	for _, t := range tags {
+		if aws.ToString(t.Key) == "Name" {
+			if v := aws.ToString(t.Value); v != "" {
+				return v
+			}
+		}
+	}
+	return "(No Name)"
 }

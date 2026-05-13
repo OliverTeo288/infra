@@ -1,9 +1,10 @@
 builds:
   - binary: infra
     ldflags:
-      - '-X "raid/infra/internal/functions.GitlabHttpsDomain={{ .Env.GITLAB_HTTPS_DOMAIN }}"'
-      - '-X "raid/infra/internal/functions.GitlabSshDomain={{ .Env.GITLAB_SSH_DOMAIN }}"'
-      - '-X "raid/infra/internal/functions.CommonAwsAccountId={{ .Env.COMMON_AWS_ACCOUNT_ID }}"'
+      - '-X "raid/infra/internal/config.GitlabHTTPSDomain={{ .Env.GITLAB_HTTPS_DOMAIN }}"'
+      - '-X "raid/infra/internal/config.GitlabSSHDomain={{ .Env.GITLAB_SSH_DOMAIN }}"'
+      - '-X "raid/infra/internal/config.CommonAWSAccountID={{ .Env.COMMON_AWS_ACCOUNT_ID }}"'
+      - '-X "raid/infra/internal/config.OIDCSubjectPattern={{ .Env.OIDC_SUBJECT_PATTERN }}"'
     env:
       - CGO_ENABLED=0
     goos:

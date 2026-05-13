@@ -1,10 +1,7 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
-	"raid/infra/internal/functions"
-	"raid/infra/internal/utils"
+	"raid/infra/internal/flows"
 
 	"github.com/spf13/cobra"
 )
@@ -18,37 +15,29 @@ var ecrCmd = &cobra.Command{
 var ecrReadCmd = &cobra.Command{
 	Use:   "read",
 	Short: "Create an IAM role with read-only ECR permissions",
-	Run: func(cmd *cobra.Command, args []string) {
-		profile, region, err := utils.Login()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		profile, region, err := login(cmd.Context())
 		if err != nil {
-			fmt.Println("Error logging in:", err)
-			os.Exit(1)
+			return err
 		}
-		if err := functions.CreateECRReadRole(profile, region); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
+		return flows.CreateECRReadRole(cmd.Context(), profile, region)
 	},
 }
 
 var ecrWriteCmd = &cobra.Command{
 	Use:   "write",
 	Short: "Create an IAM role with ECR push permissions",
-	Run: func(cmd *cobra.Command, args []string) {
-		profile, region, err := utils.Login()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		profile, region, err := login(cmd.Context())
 		if err != nil {
-			fmt.Println("Error logging in:", err)
-			os.Exit(1)
+			return err
 		}
-		if err := functions.CreateECRWriteRole(profile, region); err != nil {
-			fmt.Println("Error:", err)
-			os.Exit(1)
-		}
+		return flows.CreateECRWriteRole(cmd.Context(), profile, region)
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(ecrCmd)
 	ecrCmd.AddCommand(ecrReadCmd)
 	ecrCmd.AddCommand(ecrWriteCmd)
+	rootCmd.AddCommand(ecrCmd)
 }

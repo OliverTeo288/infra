@@ -16,8 +16,9 @@ case "$ROLE_TYPE" in
 esac
 
 ROLE_ARN="arn:aws:iam::$ACCOUNT_ID:role/$ROLE_NAME"
-read -p "Enter ECR Image (<aws_account_id>.dkr.ecr.ap-southeast-1.amazonaws.com/<ecr_repo>:<image_tag>): " ECR_IMAGE
-REGION="ap-southeast-1"
+read -p "Enter ECR Image (<aws_account_id>.dkr.ecr.<region>.amazonaws.com/<ecr_repo>:<image_tag>): " ECR_IMAGE
+REGION="${AWS_REGION:-ap-southeast-1}"
+echo "Using region: $REGION (override via AWS_REGION env var)"
 
 export AWS_ACCESS_KEY_ID
 export AWS_SECRET_ACCESS_KEY
@@ -43,12 +44,12 @@ aws ecr describe-repositories --region "$REGION" --output table --query 'reposit
 echo
 
 if [[ ! "$ECR_IMAGE" == *".amazonaws.com"* ]]; then
-    ECR_IMAGE="$ASSUMED_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com/$ECR_IMAGE"
+    ECR_IMAGE="$ASSUMED_ACCOUNT_ID.dkr.ecr.${REGION}.amazonaws.com/$ECR_IMAGE"
     echo "Using full ECR URL: $ECR_IMAGE"
 fi
 
 echo "4. Getting ECR login token"
-aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$ASSUMED_ACCOUNT_ID.dkr.ecr.ap-southeast-1.amazonaws.com"
+aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$ASSUMED_ACCOUNT_ID.dkr.ecr.${REGION}.amazonaws.com"
 
 if [ "$ROLE_TYPE" = "read" ]; then
     echo "5. Pulling ECR image: $ECR_IMAGE"

@@ -4,14 +4,13 @@
 
 ## Features
 
-- **`infra portforward`**: Port forwards into a private RDS instance through ECS Fargate & EC2 using SSM.
-- **`infra ecs exec`**: Execute shell commands interactively in ECS containers.
-- **`infra init`**: Initializes your repository by:
-  1. Creating Terraform GitOps templates.
-  2. Creating an S3 state bucket for Terraform.
-  3. Creating an IAM role for GitOps integration.
-- **`infra ecr read`**: Creates an IAM role named 'ecrreader' with read-only ECR permissions and cross-account trust relationship.
-- **`infra ecr write`**: Creates an IAM role named 'ecrwriter' with ECR push permissions and cross-account trust relationship.
+- **`infra portforward`** — Port-forward into a private RDS instance through ECS Fargate or EC2 over SSM.
+- **`infra ecs exec`** — Execute shell commands interactively in ECS containers (`--shell` overrides the default `/bin/sh`).
+- **`infra init`** — End-to-end project bootstrap: clone template repo, create S3 state bucket, create GitOps IAM role + OIDC provider. Use `--auto-approve`/`-a` to skip between-step prompts.
+- **`infra ecr read`** — Creates an IAM role named `ecrreader` with read-only ECR permissions and cross-account trust.
+- **`infra ecr write`** — Creates an IAM role named `ecrwriter` with ECR push permissions and cross-account trust.
+
+All commands support `--log-format json|text` and `--log-level debug|info|warn|error` (also via `INFRA_LOG_FORMAT` / `INFRA_LOG_LEVEL`).
 
 ## Installation via Homebrew
 
@@ -126,6 +125,26 @@ You can also run `infra init` with specific subcommands to create only individua
     infra init role
     ```
 
+## Project layout
+
+```
+cmd/                      cobra command tree (thin RunE adapters)
+internal/
+  awsauth/                AWS profile discovery + SSO login
+  awscfg/                 SDK config loader (transparently handles floci routing)
+  config/                 build-time + env config
+  ec2/  ecs/  rds/        SDK-backed wrappers, one per AWS service
+  flows/                  end-to-end orchestration (one func per CLI command)
+  iam/                    IAM role + OIDC + trust-policy primitives
+  observability/          slog setup + AuditHook contract
+  prompt/                 interactive stdin prompts
+  s3/                     S3 bucket bootstrap
+  scaffold/               clone-template repo workflow
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the rules of thumb on where new
+code belongs.
+
 ### Additional Notes
 
 -   The `infra init` process requires your AWS profile to have the necessary permissions for creating resources such as S3 buckets and IAM roles.
@@ -134,150 +153,86 @@ You can also run `infra init` with specific subcommands to create only individua
 
 ---
 
+## Testing
+
+The codebase has two tiers of tests:
+
+| Tier | Scope | How to run | Requires |
+|---|---|---|---|
+| **Unit** | Pure-Go logic: trust-policy generators, config URL parsing, CWD-empty detection, etc. | `go test ./...` | Go toolchain only |
+| **Integration** | Real AWS SDK calls against a local [floci](https://github.com/floci-io/floci) emulator: IAM role creation, S3 bucket setup, OIDC provider idempotency | `scripts/test-floci.sh` | Docker + floci image |
+
+Integration tests are guarded by `//go:build integration` so they never run in plain `go test ./...`.
+
+### Running unit tests
+
+```bash
+go test -race ./...
+```
+
+### Running integration tests against floci
+
+The repo ships a helper script that boots floci, runs the integration suite, and tears the container down on exit:
+
+```bash
+# Full cycle (recommended): start floci → run tests → tear down
+scripts/test-floci.sh
+
+# Just bring up floci and leave it running
+scripts/test-floci.sh up
+
+# Drop into a subshell with FLOCI_ENDPOINT + dummy AWS creds exported,
+# so you can exercise the CLI itself against floci
+scripts/test-floci.sh shell
+./infra portforward      # hits floci instead of real AWS
+
+# Stop the container
+scripts/test-floci.sh down
+```
+
+Environment overrides (set before invoking the script):
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `FLOCI_IMAGE` | `floci/floci:latest` | Docker image tag |
+| `FLOCI_PORT` | `4566` | Host port to bind |
+| `FLOCI_CONTAINER` | `floci-infra-test` | Docker container name |
+| `FLOCI_WAIT_SECS` | `60` | Healthcheck timeout |
+
+### How floci routing works
+
+When the `FLOCI_ENDPOINT` env var is set, `internal/awscfg.LoadConfig` automatically:
+
+- Points the AWS SDK at that endpoint
+- Uses static dummy credentials (`test`/`test`) — bypasses SSO / shared config
+
+This is the same code path used by the integration tests and by `scripts/test-floci.sh shell`. Production builds are unaffected — when `FLOCI_ENDPOINT` is empty, the SDK resolves credentials normally.
+
+### CI
+
+`.github/workflows/ci.yml` runs three jobs on every push/PR and daily at 02:00 SGT (GMT+8):
+
+- **lint** — `gofmt`, `go vet`, `staticcheck`
+- **unit** — `go build` + `go test -race`
+- **integration** — boots a floci service container and runs `go test -tags=integration`
+
+The daily schedule catches AWS SDK minor releases, floci API drift, and dependency vulnerability advisories before they land in a release.
+
+### Logging
+
+Both the CLI and the integration tests emit structured logs via `log/slog`. Useful flags / env vars:
+
+```bash
+./infra --log-format json --log-level debug portforward
+INFRA_LOG_FORMAT=json INFRA_LOG_LEVEL=debug ./infra ...
+```
+
+Every AWS-mutating action (`iam:CreateRole`, `s3:CreateBucket`, etc.) emits one audit-style log line tagged with a session ID so a multi-step flow (e.g. `infra init`) can be correlated end-to-end. JSON output is ready to ship to Datadog.
+
+---
+
 ## IAM Permissions
 
-### `infra portforward`
-
-Required permissions for port forwarding into RDS via ECS/EC2:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "rds:DescribeDBInstances",
-        "rds:DescribeDBProxies",
-        "ec2:DescribeInstances",
-        "ec2:DescribeRegions",
-        "ecs:ListClusters",
-        "ecs:ListServices",
-        "ecs:ListTasks",
-        "ecs:DescribeTasks"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "ssm:StartSession",
-      "Resource": [
-        "arn:aws:ec2:*:*:instance/*",
-        "arn:aws:ecs:*:*:task/*",
-        "arn:aws:ssm:*:*:document/AWS-StartPortForwardingSessionToRemoteHost"
-      ]
-    }
-  ]
-}
-```
-
-### `infra ecs exec`
-
-Required permissions for executing commands in ECS containers:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "ecs:ListClusters",
-        "ecs:ListServices",
-        "ecs:ListTasks",
-        "ecs:DescribeTasks",
-        "ecs:ExecuteCommand",
-        "ec2:DescribeRegions"
-      ],
-      "Resource": "*"
-    },
-    {
-      "Effect": "Allow",
-      "Action": "ssm:StartSession",
-      "Resource": [
-        "arn:aws:ecs:*:*:task/*",
-        "arn:aws:ssm:*:*:document/AmazonECS-ExecuteInteractiveCommand"
-      ]
-    }
-  ]
-}
-```
-
-### `infra init`
-
-Required permissions for initializing Terraform GitOps setup:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:CreateBucket",
-        "s3:PutBucketVersioning",
-        "s3:PutBucketPolicy",
-        "s3:PutObject"
-      ],
-      "Resource": [
-        "arn:aws:s3:::*-backend-tf-*",
-        "arn:aws:s3:::*-backend-tf-*/*"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreateRole",
-        "iam:PutRolePolicy",
-        "iam:CreateOpenIDConnectProvider",
-        "iam:GetOpenIDConnectProvider"
-      ],
-      "Resource": [
-        "arn:aws:iam::*:role/TerraformGitopsRole",
-        "arn:aws:iam::*:oidc-provider/sgts.gitlab-dedicated.com"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "sts:GetCallerIdentity",
-        "ec2:DescribeRegions"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-### `infra ecr read` / `infra ecr write`
-
-Required permissions for creating ECR roles:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "iam:CreateRole",
-        "iam:PutRolePolicy"
-      ],
-      "Resource": [
-        "arn:aws:iam::*:role/ecrreader",
-        "arn:aws:iam::*:role/ecrwriter"
-      ]
-    },
-    {
-      "Effect": "Allow",
-      "Action": [
-        "sts:GetCallerIdentity",
-        "ec2:DescribeRegions"
-      ],
-      "Resource": "*"
-    }
-  ]
-}
-```
-
-For more detailed information about IAM permissions, see [IAM_PERMISSIONS.md](IAM_PERMISSIONS.md).
+Per-command IAM policies live in [IAM_PERMISSIONS.md](IAM_PERMISSIONS.md).
+Attach the relevant policy to the AWS profile / role you use when invoking
+the CLI.

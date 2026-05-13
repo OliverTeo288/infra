@@ -1,17 +1,30 @@
+// Package rds wraps the AWS RDS API for listing instances/proxies and
+// resolving their endpoints into a (host, port) pair the SSM port-forward
+// document can target.
 package rds
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strings"
 	"time"
 
-	"raid/infra/internal/utils"
+	"raid/infra/internal/awscfg"
+	"raid/infra/internal/prompt"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/rds"
 )
 
+const apiTimeout = 30 * time.Second
+
+const (
+	rdsInstancePrefix = "[RDS instance] "
+	rdsProxyPrefix    = "[RDS proxy] "
+)
+
+// enginePortMap maps RDS proxy EngineFamily values to default DB ports.
 var enginePortMap = map[string]int{
 	"MYSQL":      3306,
 	"POSTGRESQL": 5432,
@@ -20,138 +33,126 @@ var enginePortMap = map[string]int{
 	"ORACLE":     1521,
 }
 
-// GetRDSEndpoint fetches the endpoint and port for an RDS instance or proxy
-func GetRDSEndpoint(profile, region string) (string, int, error) {
-	selections, err := fetchRDSSelections(profile, region)
+// GetEndpoint prompts the user to pick an RDS instance or proxy, then returns
+// its (host, port) tuple.
+func GetEndpoint(profile, region string) (string, int, error) {
+	cfg, err := awscfg.LoadConfig(profile, region)
+	if err != nil {
+		return "", 0, err
+	}
+	client := rds.NewFromConfig(cfg)
+
+	selections, err := fetchSelections(client)
 	if err != nil {
 		return "", 0, err
 	}
 
-	identifier, err := utils.PromptSelection(selections, "RDS Instance or Proxy")
+	identifier, err := prompt.Selection(selections, "RDS Instance or Proxy")
 	if err != nil {
 		return "", 0, err
 	}
 
-	if strings.HasPrefix(identifier, "[RDS proxy]") {
-		return fetchProxyEndpoint(identifier, profile, region)
+	if strings.HasPrefix(identifier, rdsProxyPrefix) {
+		return proxyEndpoint(client, strings.TrimPrefix(identifier, rdsProxyPrefix))
 	}
-	return fetchInstanceEndpoint(identifier, profile, region)
+	return instanceEndpoint(client, strings.TrimPrefix(identifier, rdsInstancePrefix))
 }
 
-// fetchRDSSelections gathers both RDS instances and proxies
-func fetchRDSSelections(profile, region string) ([]string, error) {
-	instances, err := fetchRDSInstances(profile, region)
+func fetchSelections(client *rds.Client) ([]string, error) {
+	instances, err := listInstances(client)
 	if err != nil {
 		return nil, err
 	}
 
-	proxies, err := fetchRDSProxies(profile, region)
+	// Proxy listing is best-effort: not every account uses RDS Proxy and we
+	// don't want a Proxy IAM denial to break instance access.
+	proxies, err := listProxies(client)
 	if err != nil {
 		fmt.Printf("Note: could not fetch RDS proxies: %v\n", err)
 	}
-	selections := append(instances, proxies...)
 
-	if len(selections) == 0 {
+	all := append(instances, proxies...)
+	if len(all) == 0 {
 		return nil, errors.New("no RDS instances or proxies found")
 	}
-	return selections, nil
+	return all, nil
 }
 
-func fetchRDSInstances(profile, region string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func listInstances(client *rds.Client) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "aws", "rds", "describe-db-instances", "--query", "DBInstances[].DBInstanceIdentifier", "--output", "text", "--profile", profile, "--region", region)
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("failed to fetch RDS instances: %s", strings.TrimSpace(string(exitErr.Stderr)))
-		}
-		return nil, fmt.Errorf("failed to fetch RDS instances: %v", err)
-	}
 
-	instances := strings.Fields(strings.TrimSpace(string(output)))
-	for i, db := range instances {
-		instances[i] = fmt.Sprintf("[RDS instance] %s", db)
+	var out []string
+	paginator := rds.NewDescribeDBInstancesPaginator(client, &rds.DescribeDBInstancesInput{})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to describe RDS instances: %w", err)
+		}
+		for _, db := range page.DBInstances {
+			out = append(out, rdsInstancePrefix+aws.ToString(db.DBInstanceIdentifier))
+		}
 	}
-	return instances, nil
+	return out, nil
 }
 
-func fetchRDSProxies(profile, region string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func listProxies(client *rds.Client) ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "aws", "rds", "describe-db-proxies", "--query", "DBProxies[].DBProxyName", "--output", "text", "--profile", profile, "--region", region)
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("%s", strings.TrimSpace(string(exitErr.Stderr)))
-		}
-		return nil, err
-	}
 
-	proxies := strings.Fields(strings.TrimSpace(string(output)))
-	for i, proxy := range proxies {
-		proxies[i] = fmt.Sprintf("[RDS proxy] %s", proxy)
+	var out []string
+	paginator := rds.NewDescribeDBProxiesPaginator(client, &rds.DescribeDBProxiesInput{})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to describe RDS proxies: %w", err)
+		}
+		for _, p := range page.DBProxies {
+			out = append(out, rdsProxyPrefix+aws.ToString(p.DBProxyName))
+		}
 	}
-	return proxies, nil
+	return out, nil
 }
 
-func fetchInstanceEndpoint(identifier, profile, region string) (string, int, error) {
-	identifier = strings.TrimPrefix(identifier, "[RDS instance] ")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func instanceEndpoint(client *rds.Client, identifier string) (string, int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "aws", "rds", "describe-db-instances", "--db-instance-identifier", identifier, "--query", "DBInstances[0].Endpoint", "--output", "json", "--profile", profile, "--region", region)
 
-	output, err := cmd.Output()
+	out, err := client.DescribeDBInstances(ctx, &rds.DescribeDBInstancesInput{
+		DBInstanceIdentifier: aws.String(identifier),
+	})
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", 0, fmt.Errorf("failed to fetch instance endpoint: %s", strings.TrimSpace(string(exitErr.Stderr)))
-		}
-		return "", 0, fmt.Errorf("failed to fetch instance endpoint: %v", err)
+		return "", 0, fmt.Errorf("failed to fetch instance endpoint: %w", err)
 	}
-
-	var endpoint struct {
-		Address string `json:"Address"`
-		Port    int    `json:"Port"`
+	if len(out.DBInstances) == 0 || out.DBInstances[0].Endpoint == nil {
+		return "", 0, fmt.Errorf("instance %s has no endpoint", identifier)
 	}
-	if err := json.Unmarshal(output, &endpoint); err != nil {
-		return "", 0, fmt.Errorf("failed to parse instance endpoint JSON: %v", err)
-	}
-	return endpoint.Address, endpoint.Port, nil
+	ep := out.DBInstances[0].Endpoint
+	return aws.ToString(ep.Address), int(aws.ToInt32(ep.Port)), nil
 }
 
-func fetchProxyEndpoint(identifier, profile, region string) (string, int, error) {
-	identifier = strings.TrimPrefix(identifier, "[RDS proxy] ")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func proxyEndpoint(client *rds.Client, identifier string) (string, int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), apiTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, "aws", "rds", "describe-db-proxies", "--db-proxy-name", identifier, "--query", "DBProxies[0].[Endpoint, EngineFamily]", "--output", "json", "--profile", profile, "--region", region)
 
-	output, err := cmd.Output()
+	out, err := client.DescribeDBProxies(ctx, &rds.DescribeDBProxiesInput{
+		DBProxyName: aws.String(identifier),
+	})
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", 0, fmt.Errorf("failed to fetch proxy endpoint: %s", strings.TrimSpace(string(exitErr.Stderr)))
-		}
-		return "", 0, fmt.Errorf("failed to fetch proxy endpoint: %v", err)
+		return "", 0, fmt.Errorf("failed to fetch proxy endpoint: %w", err)
 	}
-
-	var proxyResult []interface{}
-	if err := json.Unmarshal(output, &proxyResult); err != nil {
-		return "", 0, fmt.Errorf("failed to parse proxy endpoint JSON: %v", err)
+	if len(out.DBProxies) == 0 {
+		return "", 0, fmt.Errorf("proxy %s not found", identifier)
 	}
-	if len(proxyResult) != 2 {
-		return "", 0, fmt.Errorf("unexpected proxy endpoint format")
+	p := out.DBProxies[0]
+	address := aws.ToString(p.Endpoint)
+	if address == "" {
+		return "", 0, fmt.Errorf("proxy %s has no endpoint", identifier)
 	}
-
-	address, ok := proxyResult[0].(string)
-	if !ok || address == "" {
-		return "", 0, fmt.Errorf("invalid or missing proxy endpoint address")
-	}
-	engineFamily, ok := proxyResult[1].(string)
-	if !ok || engineFamily == "" {
-		return "", 0, fmt.Errorf("invalid or missing proxy engine family")
-	}
+	engineFamily := aws.ToString(p.EngineFamily)
 	port, ok := enginePortMap[strings.ToUpper(engineFamily)]
 	if !ok {
-		return "", 0, fmt.Errorf("unknown engine family %q", engineFamily)
+		return "", 0, fmt.Errorf("unknown engine family %q for proxy %s", engineFamily, identifier)
 	}
 	return address, port, nil
 }

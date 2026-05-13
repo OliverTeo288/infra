@@ -1,11 +1,20 @@
 name: goreleaser
 
 on:
-  pull_request:
+  # Only run a publishing build on strict semver tag pushes
+  # (MAJOR.MINOR.PATCH, optionally with a pre-release suffix).
+  # PRs are validated via the main CI workflow (lint/unit/integration), so
+  # we don't need to run goreleaser on every PR — which would also expose
+  # build-time secrets to PRs from forks.
+  #
+  # Match (e.g.):     0.1.0, 5.1.2, 12.0.0, 1.2.3-rc.1
+  # Reject (e.g.):    v1.2.3, 1.2, 1.2.3.4, dev, foo
   push:
-    # run only against tags
     tags:
-      - "*"
+      - "[0-9]+.[0-9]+.[0-9]+"
+      - "[0-9]+.[0-9]+.[0-9]+-*"
+  # Allow manual runs for one-off snapshot builds.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,23 +31,27 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: stable
-      - name: Inject GITLAB_DOMAIN
+      - name: Inject build-time secrets
         run: |
           echo "GITLAB_HTTPS_DOMAIN=${{ secrets.GITLAB_HTTPS_DOMAIN }}" >> $GITHUB_ENV
           echo "GITLAB_SSH_DOMAIN=${{ secrets.GITLAB_SSH_DOMAIN }}" >> $GITHUB_ENV
           echo "COMMON_AWS_ACCOUNT_ID=${{ secrets.COMMON_AWS_ACCOUNT_ID }}" >> $GITHUB_ENV
+          echo "OIDC_SUBJECT_PATTERN=${{ secrets.OIDC_SUBJECT_PATTERN }}" >> $GITHUB_ENV
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v5
+        uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
-          version: ${{ env.GITHUB_REF_NAME }}
+          # Pin the goreleaser CLI version. Bump deliberately; "latest" would
+          # silently take any new major.
+          version: "~> v2"
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.PUBLISHER_TOKEN }}
+
   notify-slack:
     needs: goreleaser
     runs-on: ubuntu-latest
-    if: success()  # Only run if goreleaser job succeeds
+    if: success()
     steps:
       - name: Send Slack Notification
         env:
@@ -47,8 +60,11 @@ jobs:
           CI_COMMIT_TAG: ${{ github.ref_name }}
           CI_COMMIT_TAG_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          curl -X POST -H "Content-type: application/json" --data "{
-            \"CI_PROJECT_NAME\":\"$CI_PROJECT_NAME\",
-            \"CI_COMMIT_TAG\":\"$CI_COMMIT_TAG\",
-            \"CI_COMMIT_TAG_MESSAGE\":\"$CI_COMMIT_TAG_MESSAGE\"
-          }" "$SLACK_WEBHOOK"
+          # Use jq to JSON-encode the payload so untrusted commit messages
+          # can't break the JSON or smuggle escape sequences into curl args.
+          jq -nc \
+            --arg project "$CI_PROJECT_NAME" \
+            --arg tag "$CI_COMMIT_TAG" \
+            --arg message "$CI_COMMIT_TAG_MESSAGE" \
+            '{CI_PROJECT_NAME: $project, CI_COMMIT_TAG: $tag, CI_COMMIT_TAG_MESSAGE: $message}' \
+          | curl -sS -X POST -H "Content-type: application/json" --data-binary @- "$SLACK_WEBHOOK"
