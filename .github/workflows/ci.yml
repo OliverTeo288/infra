@@ -26,8 +26,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -53,7 +53,9 @@ jobs:
         id: staticcheck
         uses: dominikh/staticcheck-action@v1
         with:
-          version: "latest"
+          # Pin to v0.6.1 — v0.7.0+ require Go 1.25, this project is on
+          # Go 1.24. Bump in lockstep when go.mod's `go` directive moves.
+          version: "v0.6.1"
           install-go: false
 
       - name: Lint summary
@@ -85,8 +87,8 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -149,7 +151,7 @@ jobs:
       contents: read
       security-events: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Trivy fs scan (SARIF for code-scanning)
         uses: aquasecurity/trivy-action@v0.36.0
@@ -168,7 +170,7 @@ jobs:
 
       - name: Upload Trivy SARIF to GitHub Security
         if: always()
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
           category: trivy-fs
@@ -230,8 +232,8 @@ jobs:
         # The CLI's read paths (ECS / EC2 / RDS / IAM / S3 / STS) are pointed
         # here via FLOCI_ENDPOINT and tested with the build tag `integration`.
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
